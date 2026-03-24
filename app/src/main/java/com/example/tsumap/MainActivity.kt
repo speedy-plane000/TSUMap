@@ -2,6 +2,7 @@ package com.example.tsumap
 
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import android.os.Bundle
 import androidx.compose.material3.Button
 import androidx.activity.ComponentActivity
@@ -63,6 +64,12 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainMapScreen(){
+    val context = LocalContext.current
+
+    val grid = remember {
+        loadGrid(context)
+    }
+
     var scale by remember { mutableStateOf(2.5f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var state = rememberTransformableState {
