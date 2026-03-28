@@ -1,6 +1,9 @@
 package com.example.tsumap
 
-
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import android.os.Bundle
@@ -13,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -24,6 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.remote.creation.first
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,12 +36,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.tsumap.ui.theme.TSUMapTheme
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
@@ -46,10 +52,16 @@ import androidx.core.content.pm.ShortcutInfoCompat
 import com.example.tsumap.ui.theme.TsuBlue
 import com.example.tsumap.ui.theme.TsuBlueLight
 import com.example.tsumap.ui.theme.TsuWhite
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalConfiguration
 import kotlin.collections.plusAssign
 import kotlin.times
-
-
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,54 +75,178 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainMapScreen(){
+fun MainMapScreen() {
+
     val context = LocalContext.current
 
     val grid = remember {
         loadGrid(context)
     }
 
-    var scale by remember { mutableStateOf(2.5f) }
+    var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
-    var state = rememberTransformableState {
-            zoomChange, offsetChange, _ ->
-        val proposedScale = scale * zoomChange
-        scale = proposedScale.coerceIn(1f,5f)
-        if (scale > 1f) {
-            offset += offsetChange
-        } else {
-            offset = Offset.Zero
-        }
-    }
 
-    Scaffold(bottomBar = { AlgorithmButtonsGrid()}) {
-        paddingValues ->
+    var clickPosition by remember { mutableStateOf<Offset?>(null) }
+
+    val minScale = 1f
+    val maxScale = 4f
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(TsuWhite)
+    ) {
+        val configuration = LocalConfiguration.current
+        val density = LocalDensity.current
+
+        val boxWidth = with(density) { configuration.screenWidthDp.dp.toPx() }
+        val boxHeight = with(density) { configuration.screenHeightDp.dp.toPx() }
+
+        val imageWidth = 686f
+        val imageHeight = 563f
+
+        val imgRatio = imageWidth / imageHeight
+        val boxRatio = boxWidth / boxHeight
+
+        val actualVisualWidth = if (imgRatio > boxRatio) boxWidth else boxHeight * imgRatio
+        val actualVisualHeight = if (imgRatio > boxRatio) boxWidth / imgRatio else boxHeight
+
+        val startX = (boxWidth - actualVisualWidth) / 2f
+        val startY = (boxHeight - actualVisualHeight) / 2f
+
+        val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
+
+            val newScale = (scale * zoomChange).coerceIn(minScale, maxScale)
+
+            val maxX = maxOf(0f, (actualVisualWidth * newScale - boxWidth) / 2)
+            val maxY = maxOf(0f, (actualVisualHeight * newScale - boxHeight) / 2)
+
+            val newOffset = offset + panChange
+
+            offset = Offset(
+                x = newOffset.x.coerceIn(-maxX, maxX),
+                y = newOffset.y.coerceIn(-maxY, maxY)
+            )
+
+            scale = newScale
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(TsuBlueLight)
-                .padding(paddingValues)
                 .clip(RectangleShape)
-                .background(TsuBlueLight)
-                .transformable(state = state)
-        ){
+                .pointerInput(Unit) {
+                    detectTapGestures { tapOffset ->
+
+                        val unzoomedX = (tapOffset.x - offset.x) / scale
+                        val unzoomedY = (tapOffset.y - offset.y) / scale
+
+                        val tapOnImageX = unzoomedX - startX
+                        val tapOnImageY = unzoomedY - startY
+
+                        if (tapOnImageX < 0 || tapOnImageY < 0 ||
+                            tapOnImageX > actualVisualWidth || tapOnImageY > actualVisualHeight) {
+                            return@detectTapGestures
+                        }
+
+                        val rows = grid.size
+                        val cols = grid[0].size
+
+                        val cellX = (tapOnImageX / actualVisualWidth * cols).toInt().coerceIn(0, cols - 1)
+                        val cellY = (tapOnImageY / actualVisualHeight * rows).toInt().coerceIn(0, rows - 1)
+
+                        val cellValue = grid[cellY][cellX]
+
+                        if (cellValue !in listOf(1, 2, 3)) {
+                            return@detectTapGestures
+                        }
+
+                        val finalX = cellX
+                        val finalY = cellY
+
+                        val finalTapOnImageX = ((finalX + 0.5f) / cols) * actualVisualWidth
+                        val finalTapOnImageY = ((finalY + 0.5f) / rows) * actualVisualHeight
+
+                        clickPosition = Offset(
+                            x = finalTapOnImageX + startX,
+                            y = finalTapOnImageY + startY
+                        )
+                    }
+                }
+        ) {
+
             Image(
                 painter = painterResource(id = R.drawable.tsu_map),
-                contentDescription = "TSU map",
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxSize()
+                    .transformable(transformableState)
                     .graphicsLayer(
                         scaleX = scale,
                         scaleY = scale,
                         translationX = offset.x,
                         translationY = offset.y
-                    ),
-                contentScale = ContentScale.None
+                    )
             )
+            clickPosition?.let { pos ->
+                val dotSize = 12.dp
+                val dotRadiusPx = with(density) { (dotSize / 2).toPx() }
+
+                Box(
+                    modifier = Modifier
+                        .offset {
+                            IntOffset(
+                                x = (pos.x * scale + offset.x - dotRadiusPx).toInt(),
+                                y = (pos.y * scale + offset.y - dotRadiusPx).toInt()
+                            )
+                        }
+                        .size(dotSize)
+                        .background(Color.Red, shape = CircleShape)
+                )
+            }
+        }
+
+        Button(
+            onClick = {},
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = TsuBlue,
+                contentColor = TsuWhite
+            )
+        ) {
+            Text("A*")
+        }
+
+        Button(
+            onClick = {},
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = TsuBlue,
+                contentColor = TsuWhite
+            )
+        ) {
+            Text("Cluster")
+        }
+
+        Button(
+            onClick = {},
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = TsuBlue,
+                contentColor = TsuWhite
+            )
+        ) {
+            Text("Algo")
         }
     }
 }
-
 
 @Composable
 fun AlgorithmButtonsGrid() {
@@ -149,6 +285,41 @@ fun AlgorithmButtonsGrid() {
             }
         }
     }
+}
+
+fun findNearestRoad(grid: Array<IntArray>, startX: Int, startY: Int): Pair<Int, Int>? {
+
+    val rows = grid.size
+    val cols = grid[0].size
+
+    val visited = Array(rows) { BooleanArray(cols) }
+    val queue = ArrayDeque<Pair<Int, Int>>()
+
+    queue.add(startX to startY)
+    visited[startY][startX] = true
+
+    val directions = listOf(
+        1 to 0, -1 to 0,
+        0 to 1, 0 to -1
+    )
+
+    while (queue.isNotEmpty()) {
+        val (x, y) = queue.removeFirst()
+
+        if (grid[y][x] == 1) return x to y
+
+        for ((dx, dy) in directions) {
+            val nx = x + dx
+            val ny = y + dy
+
+            if (nx in 0 until cols && ny in 0 until rows && !visited[ny][nx]) {
+                visited[ny][nx] = true
+                queue.add(nx to ny)
+            }
+        }
+    }
+
+    return null
 }
 
 @Composable
