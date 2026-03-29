@@ -89,9 +89,7 @@ fun MainMapScreen() {
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
 
-    var clickPosition by remember { mutableStateOf<Offset?>(null) }
     var showRoads by remember { mutableStateOf(false) }
-
     var startPoint by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var endPoint by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
@@ -146,6 +144,8 @@ fun MainMapScreen() {
                 .pointerInput(Unit) {
                     detectTapGestures { tapOffset ->
 
+                        if (selectionMode == null) return@detectTapGestures
+
                         val unzoomedX = (tapOffset.x - offset.x) / scale
                         val unzoomedY = (tapOffset.y - offset.y) / scale
 
@@ -181,10 +181,11 @@ fun MainMapScreen() {
                         val finalTapOnImageX = ((finalX + 0.5f) / cols) * actualVisualWidth
                         val finalTapOnImageY = ((finalY + 0.5f) / rows) * actualVisualHeight
 
-                        clickPosition = Offset(
-                            x = finalTapOnImageX + startX,
-                            y = finalTapOnImageY + startY
-                        )
+                        if (selectionMode == "start") {
+                            startPoint = finalX to finalY
+                        } else if (selectionMode == "end") {
+                            endPoint = finalX to finalY
+                        }
                     }
                 }
                 .transformable(transformableState)
@@ -214,24 +215,65 @@ fun MainMapScreen() {
                         startY = startY
                     )
                 }
+
+                startPoint?.let { (x, y) ->
+
+                    val px = startX + (x + 0.5f) / grid[0].size * actualVisualWidth
+                    val py = startY + (y + 0.5f) / grid.size * actualVisualHeight
+
+                    val dotSize = 12.dp
+                    val dotRadiusPx = with(density) { (dotSize / 2).toPx() }
+
+                    Box(
+                        modifier = Modifier
+                            .offset {
+                                IntOffset(
+                                    (px - dotRadiusPx).toInt(),
+                                    (py - dotRadiusPx).toInt()
+                                )
+                            }
+                            .size(16.dp)
+                            .background(TsuWhite, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .background(TsuBlue, CircleShape)
+                        )
+                    }
+                }
+
+                endPoint?.let { (x, y) ->
+
+                    val px = startX + (x + 0.5f) / grid[0].size * actualVisualWidth
+                    val py = startY + (y + 0.5f) / grid.size * actualVisualHeight
+
+                    val dotSize = 12.dp
+                    val dotRadiusPx = with(density) { (dotSize / 2).toPx() }
+
+                    Box(
+                        modifier = Modifier
+                            .offset {
+                                IntOffset(
+                                    (px - dotRadiusPx).toInt(),
+                                    (py - dotRadiusPx).toInt()
+                                )
+                            }
+                            .size(16.dp)
+                            .background(TsuBlue, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .background(TsuWhite, CircleShape)
+                        )
+                    }
+                }
             }
 
-            clickPosition?.let { pos ->
-                val dotSize = 12.dp
-                val dotRadiusPx = with(density) { (dotSize / 2).toPx() }
 
-                Box(
-                    modifier = Modifier
-                        .offset {
-                            IntOffset(
-                                x = (pos.x * scale + offset.x - dotRadiusPx).toInt(),
-                                y = (pos.y * scale + offset.y - dotRadiusPx).toInt()
-                            )
-                        }
-                        .size(dotSize)
-                        .background(Color.Red, shape = CircleShape)
-                )
-            }
         }
 
         Row(
@@ -252,7 +294,7 @@ fun MainMapScreen() {
             }
 
             Button(
-                onClick = {},
+                onClick = { selectionMode = "start" },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = TsuBlue,
                     contentColor = TsuWhite
@@ -262,7 +304,7 @@ fun MainMapScreen() {
             }
 
             Button(
-                onClick = {},
+                onClick = { selectionMode = "end" },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = TsuBlue,
                     contentColor = TsuWhite
