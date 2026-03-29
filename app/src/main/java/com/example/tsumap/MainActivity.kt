@@ -140,57 +140,6 @@ fun MainMapScreen() {
             modifier = Modifier
                 .fillMaxSize()
                 .clip(RectangleShape)
-                .pointerInput(Unit) {
-                    detectTapGestures { tapOffset ->
-
-                        if (selectionMode == null) return@detectTapGestures
-
-                        val unzoomedX = (tapOffset.x - offset.x) / scale
-                        val unzoomedY = (tapOffset.y - offset.y) / scale
-
-                        val tapOnImageX = unzoomedX - startX
-                        val tapOnImageY = unzoomedY - startY
-
-                        if (tapOnImageX < 0 || tapOnImageY < 0 ||
-                            tapOnImageX > actualVisualWidth || tapOnImageY > actualVisualHeight) {
-                            return@detectTapGestures
-                        }
-
-                        val rows = grid.size
-                        val cols = grid[0].size
-
-                        val cellX = (tapOnImageX / actualVisualWidth * cols).toInt().coerceIn(0, cols - 1)
-                        val cellY = (tapOnImageY / actualVisualHeight * rows).toInt().coerceIn(0, rows - 1)
-
-                        var finalX = cellX
-                        var finalY = cellY
-
-                        val cellValue = grid[cellY][cellX]
-
-                        if (cellValue != 1) {
-                            val nearest = findNearestRoad(grid, cellX, cellY)
-                            if (nearest != null) {
-                                finalX = nearest.first
-                                finalY = nearest.second
-                            } else {
-                                return@detectTapGestures
-                            }
-                        }
-
-                        val finalTapOnImageX = ((finalX + 0.5f) / cols) * actualVisualWidth
-                        val finalTapOnImageY = ((finalY + 0.5f) / rows) * actualVisualHeight
-
-                        if (selectionMode == "start") {
-                            startPoint = finalX to finalY
-                        } else if (selectionMode == "end") {
-                            endPoint = finalX to finalY
-                        }
-
-                        if (startPoint != null && endPoint != null) {
-                            path = aStar(grid, startPoint!!, endPoint!!)
-                        }
-                    }
-                }
                 .transformable(transformableState)
                 .graphicsLayer(
                     scaleX = scale,
@@ -200,7 +149,53 @@ fun MainMapScreen() {
                 )
         ) {
 
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTapGestures { tapOffset ->
+
+                            if (selectionMode == null) return@detectTapGestures
+
+                            val tapOnImageX = tapOffset.x - startX
+                            val tapOnImageY = tapOffset.y - startY
+
+                            if (tapOnImageX < 0 || tapOnImageY < 0 ||
+                                tapOnImageX > actualVisualWidth || tapOnImageY > actualVisualHeight) {
+                                return@detectTapGestures
+                            }
+
+                            val rows = grid.size
+                            val cols = grid[0].size
+
+                            val cellX = (tapOnImageX / actualVisualWidth * cols).toInt().coerceIn(0, cols - 1)
+                            val cellY = (tapOnImageY / actualVisualHeight * rows).toInt().coerceIn(0, rows - 1)
+
+                            var finalX = cellX
+                            var finalY = cellY
+
+                            val cellValue = grid[cellY][cellX]
+
+                            if (cellValue != 1) {
+                                val nearest = findNearestRoad(grid, cellX, cellY)
+                                if (nearest != null) {
+                                    finalX = nearest.first
+                                    finalY = nearest.second
+                                } else return@detectTapGestures
+                            }
+
+                            if (selectionMode == "start") {
+                                startPoint = finalX to finalY
+                            } else if (selectionMode == "end") {
+                                endPoint = finalX to finalY
+                            }
+
+                            if (startPoint != null && endPoint != null) {
+                                path = aStar(grid, startPoint!!, endPoint!!)
+                            }
+                        }
+                    }
+            ) {
 
                 Image(
                     painter = painterResource(id = R.drawable.tsu_map),
@@ -301,8 +296,6 @@ fun MainMapScreen() {
                     }
                 }
             }
-
-
         }
 
         Row(
