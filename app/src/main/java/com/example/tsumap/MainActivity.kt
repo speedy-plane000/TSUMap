@@ -88,11 +88,10 @@ fun MainMapScreen() {
 
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
-
+    var path by remember { mutableStateOf<List<Pair<Int, Int>>>(emptyList()) }
     var showRoads by remember { mutableStateOf(false) }
     var startPoint by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var endPoint by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-
     var selectionMode by remember { mutableStateOf<String?>(null) }
 
     val minScale = 1f
@@ -186,6 +185,10 @@ fun MainMapScreen() {
                         } else if (selectionMode == "end") {
                             endPoint = finalX to finalY
                         }
+
+                        if (startPoint != null && endPoint != null) {
+                            path = aStar(grid, startPoint!!, endPoint!!)
+                        }
                     }
                 }
                 .transformable(transformableState)
@@ -214,6 +217,32 @@ fun MainMapScreen() {
                         startX = startX,
                         startY = startY
                     )
+                }
+
+                if (path.isNotEmpty()) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+
+                        val cellWidth = actualVisualWidth / grid[0].size
+                        val cellHeight = actualVisualHeight / grid.size
+
+                        for (i in 0 until path.size - 1) {
+                            val (x1, y1) = path[i]
+                            val (x2, y2) = path[i + 1]
+
+                            val px1 = startX + (x1 + 0.5f) * cellWidth
+                            val py1 = startY + (y1 + 0.5f) * cellHeight
+
+                            val px2 = startX + (x2 + 0.5f) * cellWidth
+                            val py2 = startY + (y2 + 0.5f) * cellHeight
+
+                            drawLine(
+                                color = TsuBlue,
+                                start = Offset(px1, py1),
+                                end = Offset(px2, py2),
+                                strokeWidth = 6f
+                            )
+                        }
+                    }
                 }
 
                 startPoint?.let { (x, y) ->
@@ -437,6 +466,84 @@ fun findNearestRoad(grid: Array<IntArray>, startX: Int, startY: Int): Pair<Int, 
     }
 
     return null
+}
+
+data class Node(
+    val x: Int,
+    val y: Int,
+    var g: Int = Int.MAX_VALUE,
+    var h: Int = 0,
+    var parent: Node? = null
+) {
+    val f get() = g + h
+}
+
+fun aStar(
+    grid: Array<IntArray>,
+    start: Pair<Int, Int>,
+    end: Pair<Int, Int>
+): List<Pair<Int, Int>> {
+
+    val rows = grid.size
+    val cols = grid[0].size
+
+    fun heuristic(x: Int, y: Int) =
+        kotlin.math.abs(x - end.first) + kotlin.math.abs(y - end.second)
+
+    val openSet = mutableListOf<Node>()
+    val allNodes = Array(rows) { y ->
+        Array(cols) { x -> Node(x, y) }
+    }
+
+    val startNode = allNodes[start.second][start.first]
+    startNode.g = 0
+    startNode.h = heuristic(start.first, start.second)
+
+    openSet.add(startNode)
+
+    val directions = listOf(
+        1 to 0, -1 to 0,
+        0 to 1, 0 to -1
+    )
+
+    while (openSet.isNotEmpty()) {
+        val current = openSet.minByOrNull { it.f }!!
+
+        if (current.x == end.first && current.y == end.second) {
+            val path = mutableListOf<Pair<Int, Int>>()
+            var node: Node? = current
+            while (node != null) {
+                path.add(node.x to node.y)
+                node = node.parent
+            }
+            return path.reversed()
+        }
+
+        openSet.remove(current)
+
+        for ((dx, dy) in directions) {
+            val nx = current.x + dx
+            val ny = current.y + dy
+
+            if (nx !in 0 until cols || ny !in 0 until rows) continue
+            if (grid[ny][nx] != 1) continue
+
+            val neighbor = allNodes[ny][nx]
+            val newG = current.g + 1
+
+            if (newG < neighbor.g) {
+                neighbor.g = newG
+                neighbor.h = heuristic(nx, ny)
+                neighbor.parent = current
+
+                if (neighbor !in openSet) {
+                    openSet.add(neighbor)
+                }
+            }
+        }
+    }
+
+    return emptyList()
 }
 
 @Composable
