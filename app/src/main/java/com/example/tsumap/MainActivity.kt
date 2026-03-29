@@ -1,5 +1,6 @@
 package com.example.tsumap
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.getValue
@@ -18,6 +19,9 @@ import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -29,7 +33,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.remote.creation.first
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,8 +41,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.tsumap.ui.theme.TSUMapTheme
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Outline
@@ -75,6 +76,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun MainMapScreen() {
 
@@ -90,19 +92,23 @@ fun MainMapScreen() {
     var clickPosition by remember { mutableStateOf<Offset?>(null) }
     var showRoads by remember { mutableStateOf(false) }
 
+    var startPoint by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var endPoint by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
+    var selectionMode by remember { mutableStateOf<String?>(null) }
+
     val minScale = 1f
     val maxScale = 4f
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(TsuWhite)
     ) {
-        val configuration = LocalConfiguration.current
         val density = LocalDensity.current
 
-        val boxWidth = with(density) { configuration.screenWidthDp.dp.toPx() }
-        val boxHeight = with(density) { configuration.screenHeightDp.dp.toPx() }
+        val boxWidth = constraints.maxWidth.toFloat()
+        val boxHeight = constraints.maxHeight.toFloat()
 
         val imageWidth = 686f
         val imageHeight = 563f
@@ -157,14 +163,20 @@ fun MainMapScreen() {
                         val cellX = (tapOnImageX / actualVisualWidth * cols).toInt().coerceIn(0, cols - 1)
                         val cellY = (tapOnImageY / actualVisualHeight * rows).toInt().coerceIn(0, rows - 1)
 
+                        var finalX = cellX
+                        var finalY = cellY
+
                         val cellValue = grid[cellY][cellX]
 
-                        if (cellValue !in listOf(1, 2, 3)) {
-                            return@detectTapGestures
+                        if (cellValue != 1) {
+                            val nearest = findNearestRoad(grid, cellX, cellY)
+                            if (nearest != null) {
+                                finalX = nearest.first
+                                finalY = nearest.second
+                            } else {
+                                return@detectTapGestures
+                            }
                         }
-
-                        val finalX = cellX
-                        val finalY = cellY
 
                         val finalTapOnImageX = ((finalX + 0.5f) / cols) * actualVisualWidth
                         val finalTapOnImageY = ((finalY + 0.5f) / rows) * actualVisualHeight
@@ -175,33 +187,33 @@ fun MainMapScreen() {
                         )
                     }
                 }
+                .transformable(transformableState)
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    translationX = offset.x,
+                    translationY = offset.y
+                )
         ) {
 
-            Image(
-                painter = painterResource(id = R.drawable.tsu_map),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .transformable(transformableState)
-                    .graphicsLayer(
-                        scaleX = scale,
-                        scaleY = scale,
-                        translationX = offset.x,
-                        translationY = offset.y
-                    )
-            )
+            Box(modifier = Modifier.fillMaxSize()) {
 
-            if (showRoads) {
-                RoadsGridOverlay(
-                    grid = grid,
-                    imageWidth = actualVisualWidth,
-                    imageHeight = actualVisualHeight,
-                    startX = startX,
-                    startY = startY,
-                    scale = scale,
-                    offset = offset
+                Image(
+                    painter = painterResource(id = R.drawable.tsu_map),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
                 )
+
+                if (showRoads) {
+                    RoadsGridOverlay(
+                        grid = grid,
+                        imageWidth = actualVisualWidth,
+                        imageHeight = actualVisualHeight,
+                        startX = startX,
+                        startY = startY
+                    )
+                }
             }
 
             clickPosition?.let { pos ->
@@ -222,43 +234,42 @@ fun MainMapScreen() {
             }
         }
 
-        Button(
-            onClick = { showRoads = !showRoads },
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = TsuBlue,
-                contentColor = TsuWhite
-            )
-        ) {
-            Text("Показать дороги")
-        }
-
-        Button(
-            onClick = {},
+        Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = TsuBlue,
-                contentColor = TsuWhite
-            )
-        ) {
-            Text("Cluster")
-        }
-
-        Button(
-            onClick = {},
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
+                .fillMaxWidth()
                 .padding(16.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = TsuBlue,
-                contentColor = TsuWhite
-            )
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text("Algo")
+            Button(
+                onClick = { showRoads = !showRoads },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TsuBlue,
+                    contentColor = TsuWhite
+                )
+            ) {
+                Text("Показать дороги")
+            }
+
+            Button(
+                onClick = {},
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TsuBlue,
+                    contentColor = TsuWhite
+                )
+            ) {
+                Text("Старт")
+            }
+
+            Button(
+                onClick = {},
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TsuBlue,
+                    contentColor = TsuWhite
+                )
+            ) {
+                Text("Финиш")
+            }
         }
     }
 }
@@ -269,9 +280,7 @@ fun RoadsGridOverlay(
     imageWidth: Float,
     imageHeight: Float,
     startX: Float,
-    startY: Float,
-    scale: Float,
-    offset: Offset
+    startY: Float
 ) {
     val rows = grid.size
     val cols = grid[0].size
@@ -284,26 +293,26 @@ fun RoadsGridOverlay(
         for (y in 0 until rows) {
             for (x in 0 until cols) {
 
-                val drawX = (startX + x * cellWidth) * scale + offset.x
-                val drawY = (startY + y * cellHeight) * scale + offset.y
+                val drawX = startX + x * cellWidth
+                val drawY = startY + y * cellHeight
 
                 if (grid[y][x] == 1) {
                     drawRect(
                         color = Color.Black,
                         topLeft = Offset(drawX, drawY),
                         size = androidx.compose.ui.geometry.Size(
-                            cellWidth * scale,
-                            cellHeight * scale
+                            cellWidth,
+                            cellHeight
                         )
                     )
                 }
-                
+
                 drawRect(
                     color = Color.Gray,
                     topLeft = Offset(drawX, drawY),
                     size = androidx.compose.ui.geometry.Size(
-                        cellWidth * scale,
-                        cellHeight * scale
+                        cellWidth,
+                        cellHeight
                     ),
                     style = androidx.compose.ui.graphics.drawscope.Stroke(
                         width = 0.8f
