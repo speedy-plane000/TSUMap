@@ -12,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -87,6 +88,7 @@ fun MainMapScreen() {
     var offset by remember { mutableStateOf(Offset.Zero) }
 
     var clickPosition by remember { mutableStateOf<Offset?>(null) }
+    var showRoads by remember { mutableStateOf(false) }
 
     val minScale = 1f
     val maxScale = 4f
@@ -189,6 +191,19 @@ fun MainMapScreen() {
                         translationY = offset.y
                     )
             )
+
+            if (showRoads) {
+                RoadsGridOverlay(
+                    grid = grid,
+                    imageWidth = actualVisualWidth,
+                    imageHeight = actualVisualHeight,
+                    startX = startX,
+                    startY = startY,
+                    scale = scale,
+                    offset = offset
+                )
+            }
+
             clickPosition?.let { pos ->
                 val dotSize = 12.dp
                 val dotRadiusPx = with(density) { (dotSize / 2).toPx() }
@@ -208,7 +223,7 @@ fun MainMapScreen() {
         }
 
         Button(
-            onClick = {},
+            onClick = { showRoads = !showRoads },
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(16.dp),
@@ -217,7 +232,7 @@ fun MainMapScreen() {
                 contentColor = TsuWhite
             )
         ) {
-            Text("A*")
+            Text("Показать дороги")
         }
 
         Button(
@@ -244,6 +259,57 @@ fun MainMapScreen() {
             )
         ) {
             Text("Algo")
+        }
+    }
+}
+
+@Composable
+fun RoadsGridOverlay(
+    grid: Array<IntArray>,
+    imageWidth: Float,
+    imageHeight: Float,
+    startX: Float,
+    startY: Float,
+    scale: Float,
+    offset: Offset
+) {
+    val rows = grid.size
+    val cols = grid[0].size
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+
+        val cellWidth = imageWidth / cols
+        val cellHeight = imageHeight / rows
+
+        for (y in 0 until rows) {
+            for (x in 0 until cols) {
+
+                val drawX = (startX + x * cellWidth) * scale + offset.x
+                val drawY = (startY + y * cellHeight) * scale + offset.y
+
+                if (grid[y][x] == 1) {
+                    drawRect(
+                        color = Color.Black,
+                        topLeft = Offset(drawX, drawY),
+                        size = androidx.compose.ui.geometry.Size(
+                            cellWidth * scale,
+                            cellHeight * scale
+                        )
+                    )
+                }
+                
+                drawRect(
+                    color = Color.Gray,
+                    topLeft = Offset(drawX, drawY),
+                    size = androidx.compose.ui.geometry.Size(
+                        cellWidth * scale,
+                        cellHeight * scale
+                    ),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 0.8f
+                    )
+                )
+            }
         }
     }
 }
