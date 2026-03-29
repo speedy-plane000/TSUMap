@@ -20,6 +20,7 @@ import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
@@ -64,6 +65,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.offset
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,6 +95,23 @@ fun MainMapScreen() {
     var startPoint by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var endPoint by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var selectionMode by remember { mutableStateOf<String?>(null) }
+    var clusters by remember { mutableStateOf<List<Cluster>>(emptyList()) }
+    var differentPoints by remember { mutableStateOf<List<Point>>(emptyList()) }
+    var clusterMode by remember { mutableStateOf(false) }
+    var centers by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
+    var distanceMode by remember { mutableStateOf(DistanceMode.EUCLIDEAN) }
+    val initialCentersEuclid = listOf(
+        Point(91, 136),
+        Point(70, 0),
+        Point(111, 68)
+    ).map { it.x.toFloat() to it.y.toFloat() }
+
+    val initialCentersAStar = listOf(
+        Point(91, 136),
+        Point(70, 0),
+        Point(99, 52)
+    ).map { it.x.toFloat() to it.y.toFloat() }
+
 
     val minScale = 1f
     val maxScale = 4f
@@ -157,20 +176,24 @@ fun MainMapScreen() {
 
                             if (selectionMode == null) return@detectTapGestures
 
+
                             val tapOnImageX = tapOffset.x - startX
                             val tapOnImageY = tapOffset.y - startY
 
                             if (tapOnImageX < 0 || tapOnImageY < 0 ||
-                                tapOnImageX > actualVisualWidth || tapOnImageY > actualVisualHeight) {
+                                tapOnImageX > actualVisualWidth || tapOnImageY > actualVisualHeight
+                            ) {
                                 return@detectTapGestures
                             }
 
                             val rows = grid.size
                             val cols = grid[0].size
 
-                            val cellX = (tapOnImageX / actualVisualWidth * cols).toInt().coerceIn(0, cols - 1)
-                            val cellY = (tapOnImageY / actualVisualHeight * rows).toInt().coerceIn(0, rows - 1)
-
+                            val cellX = (tapOnImageX / actualVisualWidth * cols).toInt()
+                                .coerceIn(0, cols - 1)
+                            val cellY = (tapOnImageY / actualVisualHeight * rows).toInt()
+                                .coerceIn(0, rows - 1)
+                            println("DEBUG_TAG: Clicked at X: $cellX, Y: $cellY")
                             var finalX = cellX
                             var finalY = cellY
 
@@ -214,28 +237,63 @@ fun MainMapScreen() {
                     )
                 }
 
-                if (path.isNotEmpty()) {
+                if (path.isNotEmpty() || clusters.isNotEmpty()) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
 
                         val cellWidth = actualVisualWidth / grid[0].size
                         val cellHeight = actualVisualHeight / grid.size
 
-                        for (i in 0 until path.size - 1) {
-                            val (x1, y1) = path[i]
-                            val (x2, y2) = path[i + 1]
+                        if (path.isNotEmpty()) {
+                            for (i in 0 until path.size - 1) {
+                                val (x1, y1) = path[i]
+                                val (x2, y2) = path[i + 1]
 
-                            val px1 = startX + (x1 + 0.5f) * cellWidth
-                            val py1 = startY + (y1 + 0.5f) * cellHeight
+                                val px1 = startX + (x1 + 0.5f) * cellWidth
+                                val py1 = startY + (y1 + 0.5f) * cellHeight
 
-                            val px2 = startX + (x2 + 0.5f) * cellWidth
-                            val py2 = startY + (y2 + 0.5f) * cellHeight
+                                val px2 = startX + (x2 + 0.5f) * cellWidth
+                                val py2 = startY + (y2 + 0.5f) * cellHeight
 
-                            drawLine(
-                                color = TsuBlue,
-                                start = Offset(px1, py1),
-                                end = Offset(px2, py2),
-                                strokeWidth = 6f
-                            )
+                                drawLine(
+                                    color = TsuBlue,
+                                    start = Offset(px1, py1),
+                                    end = Offset(px2, py2),
+                                    strokeWidth = 6f
+                                )
+                            }
+                        }
+                        if (clusters.isNotEmpty()) {
+                            val colors = listOf(Color.Red, Color.Blue, Color.Green, Color.Magenta)
+
+                            clusters.forEachIndexed { index, cluster ->
+                                val color = colors[index % colors.size]
+
+                                cluster.points.forEach { point ->
+                                    val px =
+                                        startX + (point.x + 0.5f) / grid[0].size * actualVisualWidth
+                                    val py =
+                                        startY + (point.y + 0.5f) / grid.size * actualVisualHeight
+
+                                    drawCircle(
+                                        color = color,
+                                        radius = 16f,
+                                        center = Offset(px, py)
+                                    )
+                                }
+                            }
+
+                            differentPoints.forEach { point ->
+
+                                val px =
+                                    startX + (point.x + 0.5f) / grid[0].size * actualVisualWidth
+                                val py = startY + (point.y + 0.5f) / grid.size * actualVisualHeight
+
+                                drawCircle(
+                                    color = Color.Yellow,
+                                    radius = 12f,
+                                    center = Offset(px, py)
+                                )
+                            }
                         }
                     }
                 }
@@ -298,46 +356,152 @@ fun MainMapScreen() {
             }
         }
 
-        Row(
+        LazyRow(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Button(
-                onClick = { showRoads = !showRoads },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = TsuBlue,
-                    contentColor = TsuWhite
-                )
-            ) {
-                Text("Показать дороги")
-            }
 
-            Button(
-                onClick = { selectionMode = "start" },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = TsuBlue,
-                    contentColor = TsuWhite
-                )
-            ) {
-                Text("Старт")
-            }
+            if (!clusterMode) {
 
-            Button(
-                onClick = { selectionMode = "end" },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = TsuBlue,
-                    contentColor = TsuWhite
-                )
-            ) {
-                Text("Финиш")
+                item {
+                    Button(
+                        onClick = { showRoads = !showRoads },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Показать дороги")
+                    }
+                }
+
+                item {
+                    Button(
+                        onClick = {
+                            clusterMode = true
+
+                            val points = listOf(
+                                Point(91, 136),//nizcenter
+                                Point(5, 123),
+                                Point(14, 1),
+                                Point(70, 0),//verxcenter
+                                Point(149, 142),
+                                Point(161, 34),
+                                Point(150, 8),
+                                Point(111, 68),//sercentr
+                                Point(116, 70),
+                                Point(114, 71),
+                                Point(99, 52),
+                                Point(142, 104),
+                                Point(151, 127),
+                            )
+
+                            centers = points.shuffled().take(3).map {
+                                Pair(it.x.toFloat(), it.y.toFloat())
+                            }
+
+                            clusters = KMeans(points, centers, grid, DistanceMode.EUCLIDEAN)
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Кластеры")
+                    }
+                }
+
+                item {
+                    Button(
+                        onClick = { selectionMode = "start" },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Старт")
+                    }
+                }
+
+                item {
+                    Button(
+                        onClick = { selectionMode = "end" },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Финиш")
+                    }
+                }
+
+            } else {
+
+
+                item {
+                    Button(
+                        onClick = {
+                            distanceMode = DistanceMode.ASTAR
+                            centers = initialCentersAStar
+                            clusters = KMeans(
+                                clusters.flatMap { it.points },
+                                centers,
+                                grid,
+                                distanceMode
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("A*")
+                    }
+                }
+
+                item {
+                    Button(
+                        onClick = {
+                            distanceMode = DistanceMode.EUCLIDEAN
+                            centers = initialCentersEuclid
+                            clusters = KMeans(
+                                clusters.flatMap { it.points },
+                                centers,
+                                grid,
+                                distanceMode
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Евклидово")
+                    }
+                }
+
+                item {
+                    Button(
+                        onClick = {
+                            clusterMode = false
+                            clusters = emptyList()
+                            differentPoints = emptyList()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Выйти")
+                    }
+                }
             }
         }
     }
 }
-
 @Composable
 fun RoadsGridOverlay(
     grid: Array<IntArray>,
@@ -554,3 +718,4 @@ fun GreetingPreview() {
         Greeting("Android")
     }
 }
+
