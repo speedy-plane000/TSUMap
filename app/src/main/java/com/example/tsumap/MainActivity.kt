@@ -19,20 +19,12 @@ import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyGridScope
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.Surface
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -44,27 +36,18 @@ import com.example.tsumap.ui.theme.TSUMapTheme
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.core.content.pm.ShortcutInfoCompat
 import com.example.tsumap.ui.theme.TsuBlue
-import com.example.tsumap.ui.theme.TsuBlueLight
 import com.example.tsumap.ui.theme.TsuWhite
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.platform.LocalConfiguration
-import kotlin.collections.plusAssign
-import kotlin.times
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.mutableFloatStateOf
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -88,7 +71,7 @@ fun MainMapScreen() {
         loadGrid(context)
     }
 
-    var scale by remember { mutableStateOf(1f) }
+    var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var path by remember { mutableStateOf<List<Pair<Int, Int>>>(emptyList()) }
     var showRoads by remember { mutableStateOf(false) }
@@ -100,16 +83,24 @@ fun MainMapScreen() {
     var clusterMode by remember { mutableStateOf(false) }
     var centers by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
     var distanceMode by remember { mutableStateOf(DistanceMode.EUCLIDEAN) }
+    val clusterPoints = remember {
+        listOf(
+            Point(91, 136), Point(5, 123), Point(14, 1), Point(70, 0),
+            Point(149, 142), Point(161, 34), Point(150, 8), Point(111, 68),
+            Point(116, 70), Point(114, 71), Point(99, 52), Point(142, 104),
+            Point(151, 127)
+        )
+    }
     val initialCentersEuclid = listOf(
-        Point(91, 136),
-        Point(70, 0),
-        Point(111, 68)
+        Point(91, 140),
+        Point(70, 8),
+        Point(111, 67)
     ).map { it.x.toFloat() to it.y.toFloat() }
 
     val initialCentersAStar = listOf(
-        Point(91, 136),
-        Point(70, 0),
-        Point(99, 52)
+        Point(91, 140),
+        Point(70, 8),
+        Point(111, 67)
     ).map { it.x.toFloat() to it.y.toFloat() }
 
 
@@ -382,28 +373,6 @@ fun MainMapScreen() {
                     Button(
                         onClick = {
                             clusterMode = true
-
-                            val points = listOf(
-                                Point(91, 136),//nizcenter
-                                Point(5, 123),
-                                Point(14, 1),
-                                Point(70, 0),//verxcenter
-                                Point(149, 142),
-                                Point(161, 34),
-                                Point(150, 8),
-                                Point(111, 68),//sercentr
-                                Point(116, 70),
-                                Point(114, 71),
-                                Point(99, 52),
-                                Point(142, 104),
-                                Point(151, 127),
-                            )
-
-                            centers = points.shuffled().take(3).map {
-                                Pair(it.x.toFloat(), it.y.toFloat())
-                            }
-
-                            clusters = KMeans(points, centers, grid, DistanceMode.EUCLIDEAN)
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = TsuBlue,
@@ -444,14 +413,11 @@ fun MainMapScreen() {
                 item {
                     Button(
                         onClick = {
-                            distanceMode = DistanceMode.ASTAR
-                            centers = initialCentersAStar
-                            clusters = KMeans(
-                                clusters.flatMap { it.points },
-                                centers,
-                                grid,
-                                distanceMode
-                            )
+                            val roadPoints = snapPointsToRoad(grid, clusterPoints)
+                            centers = snapCentersToRoad(grid, initialCentersAStar)
+                            println("$centers")
+                            println("$roadPoints")
+                            clusters = kMeans(roadPoints, centers, grid, DistanceMode.ASTAR)
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = TsuBlue,
@@ -467,12 +433,8 @@ fun MainMapScreen() {
                         onClick = {
                             distanceMode = DistanceMode.EUCLIDEAN
                             centers = initialCentersEuclid
-                            clusters = KMeans(
-                                clusters.flatMap { it.points },
-                                centers,
-                                grid,
-                                distanceMode
-                            )
+                            val roadPoints = snapPointsToRoad(grid, clusterPoints)
+                            clusters = kMeans(roadPoints, centers, grid, distanceMode)
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = TsuBlue,
@@ -495,13 +457,15 @@ fun MainMapScreen() {
                             contentColor = TsuWhite
                         )
                     ) {
-                        Text("Выйти")
+                        Text("Назад")
                     }
                 }
             }
         }
     }
 }
+
+
 @Composable
 fun RoadsGridOverlay(
     grid: Array<IntArray>,
@@ -551,44 +515,6 @@ fun RoadsGridOverlay(
     }
 }
 
-@Composable
-fun AlgorithmButtonsGrid() {
-    val algorithms = listOf(
-        "A*",
-        "Кластеры",
-        "Генетический",
-        "Муравьиный",
-        "Дерево",
-        "Нейросеть"
-    )
-    Surface(
-        color = TsuWhite,
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-        shadowElevation = 8.dp
-    ) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            modifier = Modifier.padding(8.dp),
-            contentPadding = PaddingValues(4.dp)
-        ) {
-            items(algorithms.size){index ->
-                Button(
-                    onClick = {},
-                    colors = ButtonDefaults.buttonColors(containerColor = TsuBlue, contentColor = TsuWhite),
-                    modifier = Modifier.padding(4.dp),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = algorithms[index],
-                        fontSize = 10.sp,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1
-                    )
-                }
-            }
-        }
-    }
-}
 
 fun findNearestRoad(grid: Array<IntArray>, startX: Int, startY: Int): Pair<Int, Int>? {
 
@@ -718,4 +644,6 @@ fun GreetingPreview() {
         Greeting("Android")
     }
 }
+
+
 
