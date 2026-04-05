@@ -240,7 +240,6 @@ fun MainMapScreen() {
                                 } else return@detectTapGestures
                             }
 
-                            // ✅ 1. РЕЖИМ ПРЕПЯТСТВИЙ — ПОЛНОСТЬЮ ОТДЕЛЬНО
                             if (obstacleMode) {
                                 val cell = finalX to finalY
 
@@ -251,18 +250,15 @@ fun MainMapScreen() {
                                 }
                                 redrawTrigger++
 
-                                // ❗ сбрасываем анимацию ВСЕГДА
                                 steps = emptyList()
 
-                                // ❗ пересчитываем путь ТОЛЬКО если есть 2 точки
                                 if (startPoint != null && endPoint != null) {
                                     path = aStar(grid, startPoint!!, endPoint!!, obstacles)
                                 }
 
-                                return@detectTapGestures // ⛔ ВАЖНО: не идём дальше
+                                return@detectTapGestures
                             }
 
-                            // ✅ 2. РЕЖИМ ВЫБОРА ТОЧЕК
                             if (selectionMode == "start") {
                                 startPoint = finalX to finalY
                             } else if (selectionMode == "end") {
