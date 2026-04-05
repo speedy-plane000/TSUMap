@@ -14,6 +14,13 @@ data class Point(
     val y: Int
 )
 
+data class Landmark(
+    val name: String,
+    val point: Point,
+    var selected: Boolean = false,
+    val isUserLocation: Boolean = false
+)
+
 data class Cluster(
     val points: MutableList<Point> = mutableListOf(),
     var centerX: Float = 0f,

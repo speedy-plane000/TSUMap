@@ -17,6 +17,17 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.foundation.layout.Row
+import android.content.Context
+import com.google.android.gms.location.LocationServices
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.lazy.LazyRow
@@ -66,14 +77,50 @@ class MainActivity : ComponentActivity() {
 fun MainMapScreen() {
 
     val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        requestLocationPermission(context)
+    }
+    var steps by remember { mutableStateOf<List<AStarStep>>(emptyList()) }
+    var currentStep by remember { mutableStateOf(0) }
+    var path by remember { mutableStateOf<List<Pair<Int, Int>>>(emptyList()) }
+    LaunchedEffect(steps) {
+        if (steps.isNotEmpty()) {
+            for (i in steps.indices) {
+                currentStep = i
+                kotlinx.coroutines.delay(50)
+            }
 
+            path = steps.last().path
+        }
+    }
     val grid = remember {
         loadGrid(context)
     }
 
+    var landmarks by remember {
+        mutableStateOf(listOf(
+            Landmark("Геолокация сейчас", Point(0, 0), isUserLocation = true),
+            Landmark("Декоративный Домик", Point(28, 75)),
+            Landmark("Ботанический сад", Point(55, 66)),
+            Landmark("Скульптура Белки", Point(116, 88)),
+            Landmark("Шахматы", Point(79, 99)),
+            Landmark("Камень", Point(110, 101)),
+            Landmark("Озеро", Point(91, 31)),
+            Landmark("Деревянная Арка", Point(63, 72)),
+            Landmark("Мечеть Белая", Point(78, 6)),
+            Landmark("Арт-объект Птицы", Point(131, 95)),
+            Landmark("Стрит-арт Хамелеон", Point(141, 47))
+        ))
+    }
+
+    var obstacles by remember { mutableStateOf(mutableSetOf<Pair<Int, Int>>()) }
+    var redrawTrigger by remember { mutableStateOf(0) }
+    var obstacleMode by remember { mutableStateOf(false) }
+    var aStarMode by remember { mutableStateOf(false) }
+    var showSheet by remember { mutableStateOf(false) }
+    var isAcoMode by remember { mutableStateOf(false) }
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
-    var path by remember { mutableStateOf<List<Pair<Int, Int>>>(emptyList()) }
     var showRoads by remember { mutableStateOf(false) }
     var startPoint by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var endPoint by remember { mutableStateOf<Pair<Int, Int>?>(null) }
@@ -165,17 +212,14 @@ fun MainMapScreen() {
                     .pointerInput(Unit) {
                         detectTapGestures { tapOffset ->
 
-                            if (selectionMode == null) return@detectTapGestures
-
+                            if (!obstacleMode && selectionMode == null) return@detectTapGestures
 
                             val tapOnImageX = tapOffset.x - startX
                             val tapOnImageY = tapOffset.y - startY
 
                             if (tapOnImageX < 0 || tapOnImageY < 0 ||
                                 tapOnImageX > actualVisualWidth || tapOnImageY > actualVisualHeight
-                            ) {
-                                return@detectTapGestures
-                            }
+                            ) return@detectTapGestures
 
                             val rows = grid.size
                             val cols = grid[0].size
@@ -184,13 +228,11 @@ fun MainMapScreen() {
                                 .coerceIn(0, cols - 1)
                             val cellY = (tapOnImageY / actualVisualHeight * rows).toInt()
                                 .coerceIn(0, rows - 1)
-                            println("DEBUG_TAG: Clicked at X: $cellX, Y: $cellY")
+
                             var finalX = cellX
                             var finalY = cellY
 
-                            val cellValue = grid[cellY][cellX]
-
-                            if (cellValue != 1) {
+                            if (grid[cellY][cellX] != 1) {
                                 val nearest = findNearestRoad(grid, cellX, cellY)
                                 if (nearest != null) {
                                     finalX = nearest.first
@@ -198,14 +240,39 @@ fun MainMapScreen() {
                                 } else return@detectTapGestures
                             }
 
+                            // ✅ 1. РЕЖИМ ПРЕПЯТСТВИЙ — ПОЛНОСТЬЮ ОТДЕЛЬНО
+                            if (obstacleMode) {
+                                val cell = finalX to finalY
+
+                                if (cell in obstacles) {
+                                    obstacles.remove(cell)
+                                } else {
+                                    obstacles.add(cell)
+                                }
+                                redrawTrigger++
+
+                                // ❗ сбрасываем анимацию ВСЕГДА
+                                steps = emptyList()
+
+                                // ❗ пересчитываем путь ТОЛЬКО если есть 2 точки
+                                if (startPoint != null && endPoint != null) {
+                                    path = aStar(grid, startPoint!!, endPoint!!, obstacles)
+                                }
+
+                                return@detectTapGestures // ⛔ ВАЖНО: не идём дальше
+                            }
+
+                            // ✅ 2. РЕЖИМ ВЫБОРА ТОЧЕК
                             if (selectionMode == "start") {
                                 startPoint = finalX to finalY
                             } else if (selectionMode == "end") {
                                 endPoint = finalX to finalY
                             }
 
+                            steps = emptyList()
+
                             if (startPoint != null && endPoint != null) {
-                                path = aStar(grid, startPoint!!, endPoint!!)
+                                path = aStar(grid, startPoint!!, endPoint!!, obstacles)
                             }
                         }
                     }
@@ -228,29 +295,52 @@ fun MainMapScreen() {
                     )
                 }
 
-                if (path.isNotEmpty() || clusters.isNotEmpty()) {
+                if (
+                    obstacleMode ||
+                    obstacles.isNotEmpty() ||
+                    (aStarMode && path.isNotEmpty()) ||
+                    (clusterMode && clusters.isNotEmpty()) ||
+                    (isAcoMode && landmarks.any { it.selected })
+                ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
+                        redrawTrigger
 
                         val cellWidth = actualVisualWidth / grid[0].size
                         val cellHeight = actualVisualHeight / grid.size
 
-                        if (path.isNotEmpty()) {
-                            for (i in 0 until path.size - 1) {
-                                val (x1, y1) = path[i]
-                                val (x2, y2) = path[i + 1]
-
-                                val px1 = startX + (x1 + 0.5f) * cellWidth
-                                val py1 = startY + (y1 + 0.5f) * cellHeight
-
-                                val px2 = startX + (x2 + 0.5f) * cellWidth
-                                val py2 = startY + (y2 + 0.5f) * cellHeight
-
-                                drawLine(
-                                    color = TsuBlue,
-                                    start = Offset(px1, py1),
-                                    end = Offset(px2, py2),
-                                    strokeWidth = 6f
+                        obstacles.forEach { (x, y) ->
+                            drawRect(
+                                color = Color.Red.copy(alpha = 0.4f),
+                                topLeft = Offset(
+                                    startX + x * cellWidth,
+                                    startY + y * cellHeight
+                                ),
+                                size = androidx.compose.ui.geometry.Size(
+                                    cellWidth,
+                                    cellHeight
                                 )
+                            )
+                        }
+
+                        if (path.isNotEmpty()  && steps.isEmpty()) {
+                            if (path.size > 1) {
+                                for (i in 0 until path.size - 1) {
+                                    val (x1, y1) = path[i]
+                                    val (x2, y2) = path[i + 1]
+
+                                    val px1 = startX + (x1 + 0.5f) * cellWidth
+                                    val py1 = startY + (y1 + 0.5f) * cellHeight
+
+                                    val px2 = startX + (x2 + 0.5f) * cellWidth
+                                    val py2 = startY + (y2 + 0.5f) * cellHeight
+
+                                    drawLine(
+                                        color = TsuBlue,
+                                        start = Offset(px1, py1),
+                                        end = Offset(px2, py2),
+                                        strokeWidth = 6f
+                                    )
+                                }
                             }
                         }
                         if (clusters.isNotEmpty()) {
@@ -286,62 +376,134 @@ fun MainMapScreen() {
                                 )
                             }
                         }
+                        if (isAcoMode) {
+                            val selected = landmarks.filter { it.selected }
+
+                            selected.forEachIndexed { index, landmark ->
+
+                                val px =
+                                    startX + (landmark.point.x + 0.5f) / grid[0].size * actualVisualWidth
+                                val py =
+                                    startY + (landmark.point.y + 0.5f) / grid.size * actualVisualHeight
+
+                                if (index == 0) {
+                                    drawCircle(
+                                        color = TsuBlue,
+                                        radius = 16f,
+                                        center = Offset(px, py)
+                                    )
+                                    drawCircle(
+                                        color = TsuWhite,
+                                        radius = 10f,
+                                        center = Offset(px, py)
+                                    )
+                                } else {
+                                    drawCircle(
+                                        color = TsuWhite,
+                                        radius = 16f,
+                                        center = Offset(px, py)
+                                    )
+                                    drawCircle(
+                                        color = TsuBlue,
+                                        radius = 10f,
+                                        center = Offset(px, py)
+                                    )
+                                }
+                            }
+                        }
+                        if (aStarMode && steps.isNotEmpty()) {
+
+                            val cellWidth = actualVisualWidth / grid[0].size
+                            val cellHeight = actualVisualHeight / grid.size
+
+                            val step = steps[currentStep]
+
+                            step.closedSet.forEach { (x, y) ->
+                                drawRect(
+                                    color = TsuBlue,
+                                    topLeft = Offset(
+                                        startX + x * cellWidth,
+                                        startY + y * cellHeight
+                                    ),
+                                    size = androidx.compose.ui.geometry.Size(
+                                        cellWidth,
+                                        cellHeight
+                                    )
+                                )
+                            }
+
+                            step.openSet.forEach { (x, y) ->
+                                drawRect(
+                                    color = TsuBlue.copy(alpha = 0.2f),
+                                    topLeft = Offset(
+                                        startX + x * cellWidth,
+                                        startY + y * cellHeight
+                                    ),
+                                    size = androidx.compose.ui.geometry.Size(
+                                        cellWidth,
+                                        cellHeight
+                                    )
+                                )
+                            }
+                        }
                     }
                 }
 
-                startPoint?.let { (x, y) ->
+                if (aStarMode) {
+                    startPoint?.let { (x, y) ->
 
-                    val px = startX + (x + 0.5f) / grid[0].size * actualVisualWidth
-                    val py = startY + (y + 0.5f) / grid.size * actualVisualHeight
+                        val px = startX + (x + 0.5f) / grid[0].size * actualVisualWidth
+                        val py = startY + (y + 0.5f) / grid.size * actualVisualHeight
 
-                    val dotSize = 12.dp
-                    val dotRadiusPx = with(density) { (dotSize / 2).toPx() }
+                        val dotSize = 12.dp
+                        val dotRadiusPx = with(density) { (dotSize / 2).toPx() }
 
-                    Box(
-                        modifier = Modifier
-                            .offset {
-                                IntOffset(
-                                    (px - dotRadiusPx).toInt(),
-                                    (py - dotRadiusPx).toInt()
-                                )
-                            }
-                            .size(16.dp)
-                            .background(TsuWhite, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
                         Box(
                             modifier = Modifier
-                                .size(10.dp)
-                                .background(TsuBlue, CircleShape)
-                        )
+                                .offset {
+                                    IntOffset(
+                                        (px - dotRadiusPx).toInt(),
+                                        (py - dotRadiusPx).toInt()
+                                    )
+                                }
+                                .size(16.dp)
+                                .background(TsuWhite, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .background(TsuBlue, CircleShape)
+                            )
+                        }
                     }
-                }
 
-                endPoint?.let { (x, y) ->
+                    endPoint?.let { (x, y) ->
 
-                    val px = startX + (x + 0.5f) / grid[0].size * actualVisualWidth
-                    val py = startY + (y + 0.5f) / grid.size * actualVisualHeight
+                        val px = startX + (x + 0.5f) / grid[0].size * actualVisualWidth
+                        val py = startY + (y + 0.5f) / grid.size * actualVisualHeight
 
-                    val dotSize = 12.dp
-                    val dotRadiusPx = with(density) { (dotSize / 2).toPx() }
+                        val dotSize = 12.dp
+                        val dotRadiusPx = with(density) { (dotSize / 2).toPx() }
 
-                    Box(
-                        modifier = Modifier
-                            .offset {
-                                IntOffset(
-                                    (px - dotRadiusPx).toInt(),
-                                    (py - dotRadiusPx).toInt()
-                                )
-                            }
-                            .size(16.dp)
-                            .background(TsuBlue, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
                         Box(
                             modifier = Modifier
-                                .size(10.dp)
-                                .background(TsuWhite, CircleShape)
-                        )
+                                .offset {
+                                    IntOffset(
+                                        (px - dotRadiusPx).toInt(),
+                                        (py - dotRadiusPx).toInt()
+                                    )
+                                }
+                                .size(16.dp)
+                                .background(TsuBlue, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .background(TsuWhite, CircleShape)
+                            )
+                        }
                     }
                 }
             }
@@ -355,7 +517,7 @@ fun MainMapScreen() {
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
 
-            if (!clusterMode) {
+            if (!clusterMode  && !aStarMode) {
 
                 item {
                     Button(
@@ -372,7 +534,38 @@ fun MainMapScreen() {
                 item {
                     Button(
                         onClick = {
+                            aStarMode = true
+                            clusterMode = false
+                            isAcoMode = false
+
+                            path = emptyList()
+                            startPoint = null
+                            endPoint = null
+                            selectionMode = null
+
+                            landmarks = landmarks.map { it.copy(selected = false) }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("A*")
+                    }
+                }
+
+                item {
+                    Button(
+                        onClick = {
                             clusterMode = true
+                            isAcoMode = false
+
+                            path = emptyList()
+                            startPoint = null
+                            endPoint = null
+                            selectionMode = null
+
+                            landmarks = landmarks.map { it.copy(selected = false) }
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = TsuBlue,
@@ -385,7 +578,23 @@ fun MainMapScreen() {
 
                 item {
                     Button(
-                        onClick = { selectionMode = "start" },
+                        onClick = { showSheet = true },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Муравьиный алгоритм")
+                    }
+                }
+            } else if (aStarMode) {
+                item {
+                    Button(
+                        onClick = {
+                            obstacleMode = false
+                            selectionMode = "start"
+                            steps = emptyList()
+                        },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = TsuBlue,
                             contentColor = TsuWhite
@@ -397,7 +606,11 @@ fun MainMapScreen() {
 
                 item {
                     Button(
-                        onClick = { selectionMode = "end" },
+                        onClick = {
+                            obstacleMode = false
+                            selectionMode = "end"
+                            steps = emptyList()
+                        },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = TsuBlue,
                             contentColor = TsuWhite
@@ -407,9 +620,82 @@ fun MainMapScreen() {
                     }
                 }
 
+                item {
+                    Button(
+                        onClick = {
+                            getCurrentLocation(context) { lat, lng ->
+                                val point = mapLatLngToGrid(lat, lng, grid)
+                                val snapped = findNearestRoad(grid, point.x, point.y)
+                                startPoint = snapped ?: (point.x to point.y)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Моё местоположение")
+                    }
+                }
+
+                item {
+                    Button(
+                        onClick = {
+                            obstacleMode = !obstacleMode
+
+                            if (obstacleMode) {
+                                selectionMode = null
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Препятствия")
+                    }
+                }
+
+                item {
+                    Button(
+                        onClick = {
+                            if (startPoint != null && endPoint != null) {
+                                steps = aStarWithSteps(
+                                    grid,
+                                    startPoint!!,
+                                    endPoint!!,
+                                    obstacles
+                                )
+                                currentStep = 0
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Анимация")
+                    }
+                }
+
+                item {
+                    Button(
+                        onClick = {
+                            aStarMode = false
+                            selectionMode = null
+                            path = emptyList()
+                            obstacles.clear()
+                            steps = emptyList()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Назад")
+                    }
+                }
             } else {
-
-
                 item {
                     Button(
                         onClick = {
@@ -449,6 +735,7 @@ fun MainMapScreen() {
                     Button(
                         onClick = {
                             clusterMode = false
+
                             clusters = emptyList()
                             differentPoints = emptyList()
                         },
@@ -462,10 +749,92 @@ fun MainMapScreen() {
                 }
             }
         }
+        if (showSheet) {
+            LandmarkSelectionSheet(
+                landmarks = landmarks,
+                onToggle = { index ->
+                    val lm = landmarks[index]
+
+                    if (lm.isUserLocation) {
+                        getCurrentLocation(context) { lat, lng ->
+
+                            val mappedPoint = mapLatLngToGrid(lat, lng, grid)
+
+                            println("GPS: $lat $lng -> GRID: ${mappedPoint.x}, ${mappedPoint.y}")
+
+                            val snapped = findNearestRoad(grid, mappedPoint.x, mappedPoint.y)
+
+                            val finalPoint = if (snapped != null) {
+                                Point(snapped.first, snapped.second)
+                            } else mappedPoint
+
+                            landmarks = landmarks.toMutableList().also {
+                                it[index] = it[index].copy(
+                                    selected = true,
+                                    point = finalPoint
+                                )
+                            }
+                        }
+                    } else {
+                        landmarks = landmarks.toMutableList().also {
+                            it[index] = it[index].copy(
+                                selected = !it[index].selected
+                            )
+                        }
+                    }
+                },
+                onStart = {
+                    val selected = landmarks.filter { it.selected }
+
+                    if (selected.size >= 2) {
+
+                        isAcoMode = true
+
+                        startPoint = null
+                        endPoint = null
+                        path = emptyList()
+
+                        path = antColonyPath(
+                            grid,
+                            selected.map { it.point }
+                        )
+                    }
+
+                    showSheet = false
+                },
+                onClose = { showSheet = false }
+            )
+        }
     }
 }
 
+fun requestLocationPermission(context: Context) {
+    if (ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) != PackageManager.PERMISSION_GRANTED
+    ) {
+        ActivityCompat.requestPermissions(
+            context as ComponentActivity,
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+            1001
+        )
+    }
+}
 
+@SuppressLint("MissingPermission")
+fun getCurrentLocation(
+    context: Context,
+    onLocation: (Double, Double) -> Unit
+) {
+    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+
+    fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+        if (location != null) {
+            onLocation(location.latitude, location.longitude)
+        }
+    }
+}
 @Composable
 fun RoadsGridOverlay(
     grid: Array<IntArray>,
@@ -551,84 +920,6 @@ fun findNearestRoad(grid: Array<IntArray>, startX: Int, startY: Int): Pair<Int, 
     return null
 }
 
-data class Node(
-    val x: Int,
-    val y: Int,
-    var g: Int = Int.MAX_VALUE,
-    var h: Int = 0,
-    var parent: Node? = null
-) {
-    val f get() = g + h
-}
-
-fun aStar(
-    grid: Array<IntArray>,
-    start: Pair<Int, Int>,
-    end: Pair<Int, Int>
-): List<Pair<Int, Int>> {
-
-    val rows = grid.size
-    val cols = grid[0].size
-
-    fun heuristic(x: Int, y: Int) =
-        kotlin.math.abs(x - end.first) + kotlin.math.abs(y - end.second)
-
-    val openSet = mutableListOf<Node>()
-    val allNodes = Array(rows) { y ->
-        Array(cols) { x -> Node(x, y) }
-    }
-
-    val startNode = allNodes[start.second][start.first]
-    startNode.g = 0
-    startNode.h = heuristic(start.first, start.second)
-
-    openSet.add(startNode)
-
-    val directions = listOf(
-        1 to 0, -1 to 0,
-        0 to 1, 0 to -1
-    )
-
-    while (openSet.isNotEmpty()) {
-        val current = openSet.minByOrNull { it.f }!!
-
-        if (current.x == end.first && current.y == end.second) {
-            val path = mutableListOf<Pair<Int, Int>>()
-            var node: Node? = current
-            while (node != null) {
-                path.add(node.x to node.y)
-                node = node.parent
-            }
-            return path.reversed()
-        }
-
-        openSet.remove(current)
-
-        for ((dx, dy) in directions) {
-            val nx = current.x + dx
-            val ny = current.y + dy
-
-            if (nx !in 0 until cols || ny !in 0 until rows) continue
-            if (grid[ny][nx] != 1) continue
-
-            val neighbor = allNodes[ny][nx]
-            val newG = current.g + 1
-
-            if (newG < neighbor.g) {
-                neighbor.g = newG
-                neighbor.h = heuristic(nx, ny)
-                neighbor.parent = current
-
-                if (neighbor !in openSet) {
-                    openSet.add(neighbor)
-                }
-            }
-        }
-    }
-
-    return emptyList()
-}
-
 @Composable
 fun Greeting(name: String, modifier: Modifier = Modifier) {
     Text(
@@ -645,5 +936,68 @@ fun GreetingPreview() {
     }
 }
 
+@Composable
+fun LandmarkSelectionSheet(
+    landmarks: List<Landmark>,
+    onToggle: (Int) -> Unit,
+    onStart: () -> Unit,
+    onClose: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .padding(16.dp)
+    ) {
+        Column {
 
+            Text("Выберите достопримечательности")
+
+            landmarks.forEachIndexed { index, lm ->
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+
+                    Checkbox(
+                        checked = lm.selected,
+                        onCheckedChange = { onToggle(index) },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = TsuBlue,
+                            uncheckedColor = TsuBlue
+                        )
+                    )
+
+                    Text(
+                        lm.name,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+            }
+
+            Button(
+                onClick = onStart,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TsuBlue,
+                    contentColor = TsuWhite
+                )
+            ) {
+                Text("Построить маршрут")
+            }
+
+            Button(
+                onClick = onClose,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TsuBlue,
+                    contentColor = TsuWhite
+                )
+            ) {
+                Text("Закрыть")
+            }
+        }
+    }
+}
 
