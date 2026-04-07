@@ -22,7 +22,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.foundation.layout.Row
 import android.content.Context
-import com.google.android.gms.location.LocationServices
+import android.graphics.BitmapFactory
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
@@ -58,7 +58,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.mutableFloatStateOf
+import com.google.android.gms.location.LocationServices
+import kotlin.collections.get
+import androidx.compose.ui.platform.LocalContext
+import com.example.tsumap.ParserCafesPoints
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -96,6 +101,12 @@ fun MainMapScreen() {
     val grid = remember {
         loadGrid(context)
     }
+    val bitmap = BitmapFactory.decodeResource(context.resources, R.drawable.tsu_pixel)
+
+    data class CafePoint(
+        val name: String,
+        val point: Point
+    )
 
     var landmarks by remember {
         mutableStateOf(listOf(
@@ -130,24 +141,37 @@ fun MainMapScreen() {
     var clusterMode by remember { mutableStateOf(false) }
     var centers by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
     var distanceMode by remember { mutableStateOf(DistanceMode.EUCLIDEAN) }
-    val clusterPoints = remember {
+    val cafePoints = remember {
         listOf(
-            Point(91, 136), Point(5, 123), Point(14, 1), Point(70, 0),
-            Point(149, 142), Point(161, 34), Point(150, 8), Point(111, 68),
-            Point(116, 70), Point(114, 71), Point(99, 52), Point(142, 104),
-            Point(151, 127)
+            CafePoint("Мария-Ра", Point(15, 4)),
+            CafePoint("Цзисяни", Point(101, 6)),
+            CafePoint("Безумно", Point(149, 9)),
+            CafePoint("Абрикос", Point(149, 15)),
+            CafePoint("Пилад", Point(160, 33)),
+            CafePoint("XO Bakery", Point(92, 54)),
+            CafePoint("Сыр-Бор", Point(135, 60)),
+            CafePoint("Сибирские блины (ЦК)", Point(104, 64)),
+            CafePoint("Укромное местечко", Point(167, 89)),
+            CafePoint("Научка", Point(76, 97)),
+            CafePoint("Сибирские блины (Ленина)", Point(172, 116)),
+            CafePoint("Rostiks", Point(102, 120)),
+            CafePoint("Гербарий", Point(122, 122)),
+            CafePoint("Пятерочка", Point(4, 124)),
+            CafePoint("Ближе", Point(150, 131)),
+            CafePoint("Бристоль", Point(92, 137)),
+            CafePoint("Ярче", Point(148, 144))
         )
     }
     val initialCentersEuclid = listOf(
-        Point(91, 140),
-        Point(70, 8),
-        Point(111, 67)
+        Point(92, 137),
+        Point(104, 64),
+        Point(101, 6)
     ).map { it.x.toFloat() to it.y.toFloat() }
 
     val initialCentersAStar = listOf(
-        Point(91, 140),
-        Point(70, 8),
-        Point(111, 67)
+        Point(92, 137),
+        Point(104, 64),
+        Point(101, 6)
     ).map { it.x.toFloat() to it.y.toFloat() }
 
 
@@ -261,6 +285,10 @@ fun MainMapScreen() {
 
                             if (selectionMode == "start") {
                                 startPoint = finalX to finalY
+                                android.util.Log.d(
+                                    "TAP_COORDS",
+                                    "Start: x=$finalX, y=$finalY"
+                                )
                             } else if (selectionMode == "end") {
                                 endPoint = finalX to finalY
                             }
@@ -318,6 +346,7 @@ fun MainMapScreen() {
                             )
                         }
 
+
                         if (path.isNotEmpty()  && steps.isEmpty()) {
                             if (path.size > 1) {
                                 for (i in 0 until path.size - 1) {
@@ -343,7 +372,6 @@ fun MainMapScreen() {
                             val colors = listOf(Color.Red, Color.Blue, Color.Green, Color.Magenta)
 
                             clusters.forEachIndexed { index, cluster ->
-                                val color = colors[index % colors.size]
 
                                 cluster.points.forEach { point ->
                                     val px =
@@ -351,11 +379,43 @@ fun MainMapScreen() {
                                     val py =
                                         startY + (point.y + 0.5f) / grid.size * actualVisualHeight
 
-                                    drawCircle(
-                                        color = color,
-                                        radius = 16f,
-                                        center = Offset(px, py)
-                                    )
+                                    when (index) {
+
+                                        0 -> {
+                                            drawCircle(
+                                                color = TsuBlue,
+                                                radius = 16f,
+                                                center = Offset(px, py)
+                                            )
+                                            drawCircle(
+                                                color = TsuWhite,
+                                                radius = 10f,
+                                                center = Offset(px, py)
+                                            )
+                                        }
+
+
+                                        1 -> {
+                                            drawCircle(
+                                                color = TsuWhite,
+                                                radius = 16f,
+                                                center = Offset(px, py)
+                                            )
+                                            drawCircle(
+                                                color = TsuBlue,
+                                                radius = 10f,
+                                                center = Offset(px, py)
+                                            )
+                                        }
+
+                                        2 -> {
+                                            drawCircle(
+                                                color = TsuBlue,
+                                                radius = 14f,
+                                                center = Offset(px, py)
+                                            )
+                                        }
+                                    }
                                 }
                             }
 
@@ -695,7 +755,7 @@ fun MainMapScreen() {
                 item {
                     Button(
                         onClick = {
-                            val roadPoints = snapPointsToRoad(grid, clusterPoints)
+                            val roadPoints = snapPointsToRoad(grid, cafePoints.map { it.point })
                             centers = snapCentersToRoad(grid, initialCentersAStar)
                             println("$centers")
                             println("$roadPoints")
@@ -715,7 +775,7 @@ fun MainMapScreen() {
                         onClick = {
                             distanceMode = DistanceMode.EUCLIDEAN
                             centers = initialCentersEuclid
-                            val roadPoints = snapPointsToRoad(grid, clusterPoints)
+                            val roadPoints = snapPointsToRoad(grid, cafePoints.map { it.point })
                             clusters = kMeans(roadPoints, centers, grid, distanceMode)
                         },
                         colors = ButtonDefaults.buttonColors(
@@ -932,6 +992,7 @@ fun GreetingPreview() {
     }
 }
 
+
 @Composable
 fun LandmarkSelectionSheet(
     landmarks: List<Landmark>,
@@ -996,4 +1057,7 @@ fun LandmarkSelectionSheet(
         }
     }
 }
+
+
+
 
