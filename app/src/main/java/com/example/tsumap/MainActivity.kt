@@ -58,12 +58,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.mutableFloatStateOf
 import com.google.android.gms.location.LocationServices
-import kotlin.collections.get
-import androidx.compose.ui.platform.LocalContext
-import com.example.tsumap.ParserCafesPoints
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.graphics.TransformOrigin
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -77,7 +84,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@SuppressLint("UnusedBoxWithConstraintsScope")
+@SuppressLint("UnusedBoxWithConstraintsScope", "MutableCollectionMutableState")
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainMapScreen() {
 
@@ -129,6 +137,7 @@ fun MainMapScreen() {
     var obstacleMode by remember { mutableStateOf(false) }
     var aStarMode by remember { mutableStateOf(false) }
     var showSheet by remember { mutableStateOf(false) }
+    var isMenuExpanded by remember { mutableStateOf(false) }
     var isAcoMode by remember { mutableStateOf(false) }
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
@@ -175,213 +184,424 @@ fun MainMapScreen() {
     ).map { it.x.toFloat() to it.y.toFloat() }
 
 
-    val minScale = 1f
-    val maxScale = 4f
-
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxSize()
+    Column(
+        modifier = Modifier.fillMaxSize()
             .background(TsuWhite)
     ) {
-        val density = LocalDensity.current
-
-        val boxWidth = constraints.maxWidth.toFloat()
-        val boxHeight = constraints.maxHeight.toFloat()
-
-        val imageWidth = 686f
-        val imageHeight = 563f
-
-        val imgRatio = imageWidth / imageHeight
-        val boxRatio = boxWidth / boxHeight
-
-        val actualVisualWidth = if (imgRatio > boxRatio) boxWidth else boxHeight * imgRatio
-        val actualVisualHeight = if (imgRatio > boxRatio) boxWidth / imgRatio else boxHeight
-
-        val startX = (boxWidth - actualVisualWidth) / 2f
-        val startY = (boxHeight - actualVisualHeight) / 2f
-
-        val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
-
-            val newScale = (scale * zoomChange).coerceIn(minScale, maxScale)
-
-            val maxX = maxOf(0f, (actualVisualWidth * newScale - boxWidth) / 2)
-            val maxY = maxOf(0f, (actualVisualHeight * newScale - boxHeight) / 2)
-
-            val newOffset = offset + panChange
-
-            offset = Offset(
-                x = newOffset.x.coerceIn(-maxX, maxX),
-                y = newOffset.y.coerceIn(-maxY, maxY)
-            )
-
-            scale = newScale
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(RectangleShape)
-                .transformable(transformableState)
-                .graphicsLayer(
-                    scaleX = scale,
-                    scaleY = scale,
-                    translationX = offset.x,
-                    translationY = offset.y
+        TopAppBar(
+            title = {Text(text = "Map", color = TsuWhite)},
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = TsuBlue,
+                titleContentColor = TsuWhite,
+                actionIconContentColor = TsuWhite
+            ),
+            navigationIcon = {
+                Icon(
+                    painter = painterResource(id = R.drawable.tsu_logo),
+                    contentDescription = "Логотип",
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(24.dp)
                 )
-        ) {
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectTapGestures { tapOffset ->
-
-                            if (!obstacleMode && selectionMode == null) return@detectTapGestures
-
-                            val tapOnImageX = tapOffset.x - startX
-                            val tapOnImageY = tapOffset.y - startY
-
-                            if (tapOnImageX < 0 || tapOnImageY < 0 ||
-                                tapOnImageX > actualVisualWidth || tapOnImageY > actualVisualHeight
-                            ) return@detectTapGestures
-
-                            val rows = grid.size
-                            val cols = grid[0].size
-
-                            val cellX = (tapOnImageX / actualVisualWidth * cols).toInt()
-                                .coerceIn(0, cols - 1)
-                            val cellY = (tapOnImageY / actualVisualHeight * rows).toInt()
-                                .coerceIn(0, rows - 1)
-
-                            var finalX = cellX
-                            var finalY = cellY
-
-                            if (grid[cellY][cellX] != 1) {
-                                val nearest = findNearestRoad(grid, cellX, cellY)
-                                if (nearest != null) {
-                                    finalX = nearest.first
-                                    finalY = nearest.second
-                                } else return@detectTapGestures
-                            }
-
-                            if (obstacleMode) {
-                                val cell = finalX to finalY
-
-                                if (cell in obstacles) {
-                                    obstacles.remove(cell)
-                                } else {
-                                    obstacles.add(cell)
-                                }
-                                redrawTrigger++
-
-                                steps = emptyList()
-
-                                if (startPoint != null && endPoint != null) {
-                                    path = aStar(grid, startPoint!!, endPoint!!, obstacles)
-                                }
-
-                                return@detectTapGestures
-                            }
-
-                            if (selectionMode == "start") {
-                                startPoint = finalX to finalY
-                                android.util.Log.d(
-                                    "TAP_COORDS",
-                                    "Start: x=$finalX, y=$finalY"
-                                )
-                            } else if (selectionMode == "end") {
-                                endPoint = finalX to finalY
-                            }
-
-                            steps = emptyList()
-
-                            if (startPoint != null && endPoint != null) {
-                                path = aStar(grid, startPoint!!, endPoint!!, obstacles)
-                            }
-                        }
-                    }
-            ) {
-
-                Image(
-                    painter = painterResource(id = R.drawable.tsu_map),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                if (showRoads) {
-                    RoadsGridOverlay(
-                        grid = grid,
-                        imageWidth = actualVisualWidth,
-                        imageHeight = actualVisualHeight,
-                        startX = startX,
-                        startY = startY
+            },
+            actions = {
+                IconButton(onClick = { isMenuExpanded = true }) {
+                    Icon(
+                        imageVector = Icons.Filled.Menu,
+                        contentDescription = "Меню"
                     )
                 }
-
-                if (
-                    obstacleMode ||
-                    obstacles.isNotEmpty() ||
-                    (aStarMode && path.isNotEmpty()) ||
-                    (clusterMode && clusters.isNotEmpty()) ||
-                    (isAcoMode && landmarks.any { it.selected })
+                DropdownMenu(
+                    expanded = isMenuExpanded,
+                    onDismissRequest = { isMenuExpanded = false }
                 ) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        redrawTrigger
+                    DropdownMenuItem(
+                        text = { Text("A*") },
+                        onClick = {
+                            isMenuExpanded = false
+                            aStarMode = true
+                            clusterMode = false
+                            isAcoMode = false
+                            path = emptyList()
+                            startPoint = null
+                            endPoint = null
+                            selectionMode = null
+                            steps = emptyList()
+                            landmarks = landmarks.map { it.copy(selected = false) }
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Кластеры") },
+                        onClick = {
+                            isMenuExpanded = false
+                            clusterMode = true
+                            aStarMode = false
+                            isAcoMode = false
+                            path = emptyList()
+                            startPoint = null
+                            endPoint = null
+                            selectionMode = null
+                            steps = emptyList()
+                            landmarks = landmarks.map { it.copy(selected = false) }
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Муравьиный") },
+                        onClick = {
+                            isMenuExpanded = false
+                            aStarMode = false
+                            clusterMode = false
+                            isAcoMode = false
+                            path = emptyList()
+                            startPoint = null
+                            endPoint = null
+                            selectionMode = null
+                            steps = emptyList()
+                            landmarks = landmarks.map { it.copy(selected = false) }
+                            showSheet = true
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Генетический") },
+                        onClick = {
+                            isMenuExpanded = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Дерево Решений") },
+                        onClick = {
+                            isMenuExpanded = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Оценка заведения") },
+                        onClick = {
+                            isMenuExpanded = false
+                        }
+                    )
+                }
+            }
+        )
 
-                        val cellWidth = actualVisualWidth / grid[0].size
-                        val cellHeight = actualVisualHeight / grid.size
+        Box(
+            modifier = Modifier.weight(1f)
+                .fillMaxWidth()
+        ){
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxSize()
+            ) {
+                val density = LocalDensity.current
 
-                        obstacles.forEach { (x, y) ->
-                            drawRect(
-                                color = Color.Red.copy(alpha = 0.4f),
-                                topLeft = Offset(
-                                    startX + x * cellWidth,
-                                    startY + y * cellHeight
-                                ),
-                                size = androidx.compose.ui.geometry.Size(
-                                    cellWidth,
-                                    cellHeight
-                                )
+                val boxWidth = constraints.maxWidth.toFloat()
+                val boxHeight = constraints.maxHeight.toFloat()
+                val isMapRotated = true
+
+                val imageWidth = 686f
+                val imageHeight = 563f
+
+                val imgRatio = imageWidth / imageHeight
+                val boxRatio = boxWidth / boxHeight
+
+                val actualVisualWidth = if (imgRatio > boxRatio) boxWidth else boxHeight * imgRatio
+                val actualVisualHeight = if (imgRatio > boxRatio) boxWidth / imgRatio else boxHeight
+
+                val baseScaleX = boxWidth / actualVisualWidth
+                val baseScaleY = boxHeight / actualVisualHeight
+                val baseScale = maxOf(baseScaleX, baseScaleY)
+
+                LaunchedEffect(baseScale) {
+                    if (scale < baseScale) {
+                        scale = baseScale
+                        offset = Offset.Zero
+                    }
+                }
+
+                val minScale = baseScale
+                val maxScale = baseScale * 4f
+
+                val startX = (boxWidth - actualVisualWidth) / 2f
+                val startY = (boxHeight - actualVisualHeight) / 2f
+
+
+                fun gridToScreenPx(cellX: Float, cellY: Float, cols: Int, rows: Int): Offset {
+                    val xNorm = cellX / cols.toFloat()
+                    val yNorm = cellY / rows.toFloat()
+
+                    val x0 = startX + xNorm * actualVisualWidth
+                    val y0 = startY + yNorm * actualVisualHeight
+                    if (!isMapRotated) return Offset(x0, y0)
+
+                    val cx = startX + actualVisualWidth / 2f
+                    val cy = startY + actualVisualHeight / 2f
+                    val dx = x0 - cx
+                    val dy = y0 - cy
+                    return Offset(
+                        x = cx - dy,
+                        y = cy + dx
+                    )
+                }
+                fun screenToGridCell(tapX: Float, tapY: Float, cols: Int, rows: Int): Pair<Int, Int>? {
+                    val xUnrot: Float
+                    val yUnrot: Float
+                    if (!isMapRotated) {
+                        xUnrot = tapX
+                        yUnrot = tapY
+                    } else {
+
+                        val cx = startX + actualVisualWidth / 2f
+                        val cy = startY + actualVisualHeight / 2f
+                        val dx = tapX - cx
+                        val dy = tapY - cy
+                        xUnrot = cx + dy
+                        yUnrot = cy - dx
+                    }
+                    val localX = xUnrot - startX
+                    val localY = yUnrot - startY
+                    if (localX < 0f || localY < 0f || localX > actualVisualWidth || localY > actualVisualHeight) {
+                        return null
+                    }
+                    val xNorm = localX / actualVisualWidth
+                    val yNorm = localY / actualVisualHeight
+                    val cellX = (xNorm * cols).toInt().coerceIn(0, cols - 1)
+                    val cellY = (yNorm * rows).toInt().coerceIn(0, rows - 1)
+                    return cellX to cellY
+                }
+
+                val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
+
+                    val newScale = (scale * zoomChange).coerceIn(minScale, maxScale)
+
+                    val panContentWidth = if (isMapRotated) actualVisualHeight else actualVisualWidth
+                    val panContentHeight = if (isMapRotated) actualVisualWidth else actualVisualHeight
+
+                    val maxX = maxOf(0f, (panContentWidth * newScale - boxWidth) / 2f)
+                    val maxY = maxOf(0f, (panContentHeight * newScale - boxHeight) / 2f)
+
+
+                    val newOffset = offset + panChange
+
+                    offset = Offset(
+                        x = newOffset.x.coerceIn(-maxX, maxX),
+                        y = newOffset.y.coerceIn(-maxY, maxY)
+                    )
+
+                    scale = newScale
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RectangleShape)
+                        .transformable(transformableState)
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            translationX = offset.x,
+                            translationY = offset.y,
+                        )
+                ) {
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                detectTapGestures { tapOffset ->
+
+                                    if (!obstacleMode && selectionMode == null) return@detectTapGestures
+
+                                    val rows = grid.size
+                                    val cols = grid[0].size
+                                    val mapped = screenToGridCell(tapOffset.x, tapOffset.y, cols, rows)
+                                        ?: return@detectTapGestures
+                                    val cellX = mapped.first
+                                    val cellY = mapped.second
+
+                                    var finalX = cellX
+                                    var finalY = cellY
+
+                                    if (grid[cellY][cellX] != 1) {
+                                        val nearest = findNearestRoad(grid, cellX, cellY)
+                                        if (nearest != null) {
+                                            finalX = nearest.first
+                                            finalY = nearest.second
+                                        } else return@detectTapGestures
+                                    }
+
+                                    if (obstacleMode) {
+                                        val cell = finalX to finalY
+
+                                        if (cell in obstacles) {
+                                            obstacles.remove(cell)
+                                        } else {
+                                            obstacles.add(cell)
+                                        }
+                                        redrawTrigger++
+
+                                        steps = emptyList()
+
+                                        if (startPoint != null && endPoint != null) {
+                                            path = aStar(grid, startPoint!!, endPoint!!, obstacles)
+                                        }
+
+                                        return@detectTapGestures
+                                    }
+
+                                    if (selectionMode == "start") {
+                                        startPoint = finalX to finalY
+                                        android.util.Log.d(
+                                            "TAP_COORDS",
+                                            "Start: x=$finalX, y=$finalY"
+                                        )
+                                    } else if (selectionMode == "end") {
+                                        endPoint = finalX to finalY
+                                    }
+
+                                    steps = emptyList()
+
+                                    if (startPoint != null && endPoint != null) {
+                                        path = aStar(grid, startPoint!!, endPoint!!, obstacles)
+                                    }
+                                }
+                            }
+                    ) {
+
+                        Image(
+                            painter = painterResource(id = R.drawable.tsu_map),
+                            contentDescription = null,
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    rotationZ = if (isMapRotated) 90f else 0f
+                                    transformOrigin = TransformOrigin.Center
+                                }
+                        )
+
+                        if (showRoads) {
+                            RoadsGridOverlay(
+                                grid = grid,
+                                imageWidth = actualVisualWidth,
+                                imageHeight = actualVisualHeight,
+                                startX = startX,
+                                startY = startY
                             )
                         }
 
+                        if (
+                            obstacleMode ||
+                            obstacles.isNotEmpty() ||
+                            (aStarMode && path.isNotEmpty()) ||
+                            (clusterMode && clusters.isNotEmpty()) ||
+                            (isAcoMode && landmarks.any { it.selected })
+                        ) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                redrawTrigger
 
-                        if (path.isNotEmpty()  && steps.isEmpty()) {
-                            if (path.size > 1) {
-                                for (i in 0 until path.size - 1) {
-                                    val (x1, y1) = path[i]
-                                    val (x2, y2) = path[i + 1]
+                                val cellWidth = actualVisualWidth / grid[0].size
+                                val cellHeight = actualVisualHeight / grid.size
 
-                                    val px1 = startX + (x1 + 0.5f) * cellWidth
-                                    val py1 = startY + (y1 + 0.5f) * cellHeight
-
-                                    val px2 = startX + (x2 + 0.5f) * cellWidth
-                                    val py2 = startY + (y2 + 0.5f) * cellHeight
-
-                                    drawLine(
-                                        color = TsuBlue,
-                                        start = Offset(px1, py1),
-                                        end = Offset(px2, py2),
-                                        strokeWidth = 6f
+                                obstacles.forEach { (x, y) ->
+                                    val p = gridToScreenPx(x + 0.5f, y + 0.5f, grid[0].size, grid.size)
+                                    drawCircle(
+                                        color = Color.Red.copy(alpha = 0.6f),
+                                        radius = 6f,
+                                        center = p
                                     )
                                 }
-                            }
-                        }
-                        if (clusters.isNotEmpty()) {
-                            val colors = listOf(Color.Red, Color.Blue, Color.Green, Color.Magenta)
 
-                            clusters.forEachIndexed { index, cluster ->
 
-                                cluster.points.forEach { point ->
-                                    val px =
-                                        startX + (point.x + 0.5f) / grid[0].size * actualVisualWidth
-                                    val py =
-                                        startY + (point.y + 0.5f) / grid.size * actualVisualHeight
+                                if (path.isNotEmpty()  && steps.isEmpty()) {
+                                    if (path.size > 1) {
+                                        for (i in 0 until path.size - 1) {
+                                            val (x1, y1) = path[i]
+                                            val (x2, y2) = path[i + 1]
 
-                                    when (index) {
+                                            val p1 = gridToScreenPx(x1 + 0.5f, y1 + 0.5f, grid[0].size, grid.size)
+                                            val p2 = gridToScreenPx(x2 + 0.5f, y2 + 0.5f, grid[0].size, grid.size)
+                                            drawLine(
+                                                color = TsuBlue,
+                                                start = p1,
+                                                end = p2,
+                                                strokeWidth = 6f
+                                            )
+                                        }
+                                    }
+                                }
+                                if (clusters.isNotEmpty()) {
+                                    val colors = listOf(Color.Red, Color.Blue, Color.Green, Color.Magenta)
 
-                                        0 -> {
+                                    clusters.forEachIndexed { index, cluster ->
+
+                                        cluster.points.forEach { point ->
+                                            val p = gridToScreenPx(point.x + 0.5f, point.y + 0.5f, grid[0].size, grid.size)
+                                            val px = p.x
+                                            val py = p.y
+
+                                            when (index) {
+
+                                                0 -> {
+                                                    drawCircle(
+                                                        color = TsuBlue,
+                                                        radius = 16f,
+                                                        center = Offset(px, py)
+                                                    )
+                                                    drawCircle(
+                                                        color = TsuWhite,
+                                                        radius = 10f,
+                                                        center = Offset(px, py)
+                                                    )
+                                                }
+
+
+                                                1 -> {
+                                                    drawCircle(
+                                                        color = TsuWhite,
+                                                        radius = 16f,
+                                                        center = Offset(px, py)
+                                                    )
+                                                    drawCircle(
+                                                        color = TsuBlue,
+                                                        radius = 10f,
+                                                        center = Offset(px, py)
+                                                    )
+                                                }
+
+                                                2 -> {
+                                                    drawCircle(
+                                                        color = TsuBlue,
+                                                        radius = 14f,
+                                                        center = Offset(px, py)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    differentPoints.forEach { point ->
+
+                                        val p = gridToScreenPx(point.x + 0.5f, point.y + 0.5f, grid[0].size, grid.size)
+                                        drawCircle(
+                                            color = Color.Yellow,
+                                            radius = 12f,
+                                            center = p
+                                        )
+                                    }
+                                }
+                                if (isAcoMode) {
+                                    val selected = landmarks.filter { it.selected }
+
+                                    selected.forEachIndexed { index, landmark ->
+
+                                        val p = gridToScreenPx(
+                                            landmark.point.x + 0.5f,
+                                            landmark.point.y + 0.5f,
+                                            grid[0].size,
+                                            grid.size
+                                        )
+                                        val px = p.x
+                                        val py = p.y
+
+                                        if (index == 0) {
                                             drawCircle(
                                                 color = TsuBlue,
                                                 radius = 16f,
@@ -392,10 +612,7 @@ fun MainMapScreen() {
                                                 radius = 10f,
                                                 center = Offset(px, py)
                                             )
-                                        }
-
-
-                                        1 -> {
+                                        } else {
                                             drawCircle(
                                                 color = TsuWhite,
                                                 radius = 16f,
@@ -404,462 +621,394 @@ fun MainMapScreen() {
                                             drawCircle(
                                                 color = TsuBlue,
                                                 radius = 10f,
-                                                center = Offset(px, py)
-                                            )
-                                        }
-
-                                        2 -> {
-                                            drawCircle(
-                                                color = TsuBlue,
-                                                radius = 14f,
                                                 center = Offset(px, py)
                                             )
                                         }
                                     }
                                 }
-                            }
+                                if (aStarMode && steps.isNotEmpty()) {
 
-                            differentPoints.forEach { point ->
+                                    val cellWidth = actualVisualWidth / grid[0].size
+                                    val cellHeight = actualVisualHeight / grid.size
 
-                                val px =
-                                    startX + (point.x + 0.5f) / grid[0].size * actualVisualWidth
-                                val py = startY + (point.y + 0.5f) / grid.size * actualVisualHeight
+                                    val step = steps[currentStep]
 
-                                drawCircle(
-                                    color = Color.Yellow,
-                                    radius = 12f,
-                                    center = Offset(px, py)
-                                )
+                                    step.closedSet.forEach { (x, y) ->
+                                        val p = gridToScreenPx(x + 0.5f, y + 0.5f, grid[0].size, grid.size)
+                                        drawCircle(color = TsuBlue, radius = 4f, center = p)
+                                    }
+
+
+                                    step.openSet.forEach { (x, y) ->
+                                        val p = gridToScreenPx(x + 0.5f, y + 0.5f, grid[0].size, grid.size)
+                                        drawCircle(color = TsuBlue.copy(alpha = 0.25f), radius = 4f, center = p)
+                                    }
+                                }
                             }
                         }
-                        if (isAcoMode) {
-                            val selected = landmarks.filter { it.selected }
 
-                            selected.forEachIndexed { index, landmark ->
+                        if (aStarMode) {
+                            startPoint?.let { (x, y) ->
 
-                                val px =
-                                    startX + (landmark.point.x + 0.5f) / grid[0].size * actualVisualWidth
-                                val py =
-                                    startY + (landmark.point.y + 0.5f) / grid.size * actualVisualHeight
+                                val p = gridToScreenPx(x + 0.5f, y + 0.5f, grid[0].size, grid.size)
+                                val px = p.x
+                                val py = p.y
 
-                                if (index == 0) {
-                                    drawCircle(
-                                        color = TsuBlue,
-                                        radius = 16f,
-                                        center = Offset(px, py)
+                                val dotSize = 12.dp
+                                val dotRadiusPx = with(density) { (dotSize / 2).toPx() }
+
+                                Box(
+                                    modifier = Modifier
+                                        .offset {
+                                            IntOffset(
+                                                (px - dotRadiusPx).toInt(),
+                                                (py - dotRadiusPx).toInt()
+                                            )
+                                        }
+                                        .size(16.dp)
+                                        .background(TsuWhite, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(10.dp)
+                                            .background(TsuBlue, CircleShape)
                                     )
-                                    drawCircle(
-                                        color = TsuWhite,
-                                        radius = 10f,
-                                        center = Offset(px, py)
-                                    )
-                                } else {
-                                    drawCircle(
-                                        color = TsuWhite,
-                                        radius = 16f,
-                                        center = Offset(px, py)
-                                    )
-                                    drawCircle(
-                                        color = TsuBlue,
-                                        radius = 10f,
-                                        center = Offset(px, py)
+                                }
+                            }
+
+                            endPoint?.let { (x, y) ->
+
+                                val p = gridToScreenPx(x + 0.5f, y + 0.5f, grid[0].size, grid.size)
+                                val px = p.x
+                                val py = p.y
+
+                                val dotSize = 12.dp
+                                val dotRadiusPx = with(density) { (dotSize / 2).toPx() }
+
+                                Box(
+                                    modifier = Modifier
+                                        .offset {
+                                            IntOffset(
+                                                (px - dotRadiusPx).toInt(),
+                                                (py - dotRadiusPx).toInt()
+                                            )
+                                        }
+                                        .size(16.dp)
+                                        .background(TsuBlue, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(10.dp)
+                                            .background(TsuWhite, CircleShape)
                                     )
                                 }
                             }
                         }
-                        if (aStarMode && steps.isNotEmpty()) {
+                    }
+                }
 
-                            val cellWidth = actualVisualWidth / grid[0].size
-                            val cellHeight = actualVisualHeight / grid.size
+                IconButton(
+                    onClick = { showRoads = !showRoads },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                        .background(TsuWhite.copy(alpha = 0.9f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Map,
+                        contentDescription = if (showRoads) "Скрыть карту" else "Показать карту",
+                        tint = TsuBlue
+                    )
+                }
 
-                            val step = steps[currentStep]
+                LazyRow(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
 
-                            step.closedSet.forEach { (x, y) ->
-                                drawRect(
-                                    color = TsuBlue,
-                                    topLeft = Offset(
-                                        startX + x * cellWidth,
-                                        startY + y * cellHeight
-                                    ),
-                                    size = androidx.compose.ui.geometry.Size(
-                                        cellWidth,
-                                        cellHeight
-                                    )
+                    if (!clusterMode  && !aStarMode) {
+
+
+                        item {
+                            Button(
+                                onClick = {
+                                    aStarMode = true
+                                    clusterMode = false
+                                    isAcoMode = false
+
+                                    path = emptyList()
+                                    startPoint = null
+                                    endPoint = null
+                                    selectionMode = null
+
+                                    landmarks = landmarks.map { it.copy(selected = false) }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TsuBlue,
+                                    contentColor = TsuWhite
                                 )
-                            }
-
-                            step.openSet.forEach { (x, y) ->
-                                drawRect(
-                                    color = TsuBlue.copy(alpha = 0.2f),
-                                    topLeft = Offset(
-                                        startX + x * cellWidth,
-                                        startY + y * cellHeight
-                                    ),
-                                    size = androidx.compose.ui.geometry.Size(
-                                        cellWidth,
-                                        cellHeight
-                                    )
-                                )
+                            ) {
+                                Text("A*")
                             }
                         }
-                    }
-                }
 
-                if (aStarMode) {
-                    startPoint?.let { (x, y) ->
+                        item {
+                            Button(
+                                onClick = {
+                                    clusterMode = true
+                                    isAcoMode = false
 
-                        val px = startX + (x + 0.5f) / grid[0].size * actualVisualWidth
-                        val py = startY + (y + 0.5f) / grid.size * actualVisualHeight
+                                    path = emptyList()
+                                    startPoint = null
+                                    endPoint = null
+                                    selectionMode = null
 
-                        val dotSize = 12.dp
-                        val dotRadiusPx = with(density) { (dotSize / 2).toPx() }
-
-                        Box(
-                            modifier = Modifier
-                                .offset {
-                                    IntOffset(
-                                        (px - dotRadiusPx).toInt(),
-                                        (py - dotRadiusPx).toInt()
-                                    )
-                                }
-                                .size(16.dp)
-                                .background(TsuWhite, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .background(TsuBlue, CircleShape)
-                            )
-                        }
-                    }
-
-                    endPoint?.let { (x, y) ->
-
-                        val px = startX + (x + 0.5f) / grid[0].size * actualVisualWidth
-                        val py = startY + (y + 0.5f) / grid.size * actualVisualHeight
-
-                        val dotSize = 12.dp
-                        val dotRadiusPx = with(density) { (dotSize / 2).toPx() }
-
-                        Box(
-                            modifier = Modifier
-                                .offset {
-                                    IntOffset(
-                                        (px - dotRadiusPx).toInt(),
-                                        (py - dotRadiusPx).toInt()
-                                    )
-                                }
-                                .size(16.dp)
-                                .background(TsuBlue, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .background(TsuWhite, CircleShape)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        LazyRow(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-
-            if (!clusterMode  && !aStarMode) {
-
-                item {
-                    Button(
-                        onClick = { showRoads = !showRoads },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TsuBlue,
-                            contentColor = TsuWhite
-                        )
-                    ) {
-                        Text("Показать дороги")
-                    }
-                }
-
-                item {
-                    Button(
-                        onClick = {
-                            aStarMode = true
-                            clusterMode = false
-                            isAcoMode = false
-
-                            path = emptyList()
-                            startPoint = null
-                            endPoint = null
-                            selectionMode = null
-
-                            landmarks = landmarks.map { it.copy(selected = false) }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TsuBlue,
-                            contentColor = TsuWhite
-                        )
-                    ) {
-                        Text("A*")
-                    }
-                }
-
-                item {
-                    Button(
-                        onClick = {
-                            clusterMode = true
-                            isAcoMode = false
-
-                            path = emptyList()
-                            startPoint = null
-                            endPoint = null
-                            selectionMode = null
-
-                            landmarks = landmarks.map { it.copy(selected = false) }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TsuBlue,
-                            contentColor = TsuWhite
-                        )
-                    ) {
-                        Text("Кластеры")
-                    }
-                }
-
-                item {
-                    Button(
-                        onClick = { showSheet = true },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TsuBlue,
-                            contentColor = TsuWhite
-                        )
-                    ) {
-                        Text("Муравьиный алгоритм")
-                    }
-                }
-            } else if (aStarMode) {
-                item {
-                    Button(
-                        onClick = {
-                            obstacleMode = false
-                            selectionMode = "start"
-                            steps = emptyList()
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TsuBlue,
-                            contentColor = TsuWhite
-                        )
-                    ) {
-                        Text("Старт")
-                    }
-                }
-
-                item {
-                    Button(
-                        onClick = {
-                            obstacleMode = false
-                            selectionMode = "end"
-                            steps = emptyList()
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TsuBlue,
-                            contentColor = TsuWhite
-                        )
-                    ) {
-                        Text("Финиш")
-                    }
-                }
-
-                item {
-                    Button(
-                        onClick = {
-                            getCurrentLocation(context) { lat, lng ->
-                                val point = mapLatLngToGrid(lat, lng, grid)
-                                val snapped = findNearestRoad(grid, point.x, point.y)
-                                startPoint = snapped ?: (point.x to point.y)
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TsuBlue,
-                            contentColor = TsuWhite
-                        )
-                    ) {
-                        Text("Моё местоположение")
-                    }
-                }
-
-                item {
-                    Button(
-                        onClick = {
-                            obstacleMode = !obstacleMode
-
-                            if (obstacleMode) {
-                                selectionMode = null
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TsuBlue,
-                            contentColor = TsuWhite
-                        )
-                    ) {
-                        Text("Препятствия")
-                    }
-                }
-
-                item {
-                    Button(
-                        onClick = {
-                            if (startPoint != null && endPoint != null) {
-                                steps = aStarWithSteps(
-                                    grid,
-                                    startPoint!!,
-                                    endPoint!!,
-                                    obstacles
+                                    landmarks = landmarks.map { it.copy(selected = false) }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TsuBlue,
+                                    contentColor = TsuWhite
                                 )
-                                currentStep = 0
+                            ) {
+                                Text("Кластеры")
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TsuBlue,
-                            contentColor = TsuWhite
-                        )
-                    ) {
-                        Text("Анимация")
-                    }
-                }
+                        }
 
-                item {
-                    Button(
-                        onClick = {
-                            aStarMode = false
-                            selectionMode = null
-                            path = emptyList()
-                            obstacles.clear()
-                            steps = emptyList()
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TsuBlue,
-                            contentColor = TsuWhite
-                        )
-                    ) {
-                        Text("Назад")
-                    }
-                }
-            } else {
-                item {
-                    Button(
-                        onClick = {
-                            val roadPoints = snapPointsToRoad(grid, cafePoints.map { it.point })
-                            centers = snapCentersToRoad(grid, initialCentersAStar)
-                            println("$centers")
-                            println("$roadPoints")
-                            clusters = kMeans(roadPoints, centers, grid, DistanceMode.ASTAR)
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TsuBlue,
-                            contentColor = TsuWhite
-                        )
-                    ) {
-                        Text("A*")
-                    }
-                }
-
-                item {
-                    Button(
-                        onClick = {
-                            distanceMode = DistanceMode.EUCLIDEAN
-                            centers = initialCentersEuclid
-                            val roadPoints = snapPointsToRoad(grid, cafePoints.map { it.point })
-                            clusters = kMeans(roadPoints, centers, grid, distanceMode)
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TsuBlue,
-                            contentColor = TsuWhite
-                        )
-                    ) {
-                        Text("Евклидово")
-                    }
-                }
-
-                item {
-                    Button(
-                        onClick = {
-                            clusterMode = false
-
-                            clusters = emptyList()
-                            differentPoints = emptyList()
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TsuBlue,
-                            contentColor = TsuWhite
-                        )
-                    ) {
-                        Text("Назад")
-                    }
-                }
-            }
-        }
-        if (showSheet) {
-            LandmarkSelectionSheet(
-                landmarks = landmarks,
-                onToggle = { index ->
-                    val lm = landmarks[index]
-
-                    if (lm.isUserLocation) {
-                        getCurrentLocation(context) { lat, lng ->
-
-                            val mappedPoint = mapLatLngToGrid(lat, lng, grid)
-
-                            println("GPS: $lat $lng -> GRID: ${mappedPoint.x}, ${mappedPoint.y}")
-
-                            val snapped = findNearestRoad(grid, mappedPoint.x, mappedPoint.y)
-
-                            val finalPoint = if (snapped != null) {
-                                Point(snapped.first, snapped.second)
-                            } else mappedPoint
-
-                            landmarks = landmarks.toMutableList().also {
-                                it[index] = it[index].copy(
-                                    selected = true,
-                                    point = finalPoint
+                        item {
+                            Button(
+                                onClick = { showSheet = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TsuBlue,
+                                    contentColor = TsuWhite
                                 )
+                            ) {
+                                Text("Муравьиный алгоритм")
+                            }
+                        }
+                    } else if (aStarMode) {
+                        item {
+                            Button(
+                                onClick = {
+                                    obstacleMode = false
+                                    selectionMode = "start"
+                                    steps = emptyList()
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TsuBlue,
+                                    contentColor = TsuWhite
+                                )
+                            ) {
+                                Text("Старт")
+                            }
+                        }
+
+                        item {
+                            Button(
+                                onClick = {
+                                    obstacleMode = false
+                                    selectionMode = "end"
+                                    steps = emptyList()
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TsuBlue,
+                                    contentColor = TsuWhite
+                                )
+                            ) {
+                                Text("Финиш")
+                            }
+                        }
+
+                        item {
+                            Button(
+                                onClick = {
+                                    getCurrentLocation(context) { lat, lng ->
+                                        val point = mapLatLngToGrid(lat, lng, grid)
+                                        val snapped = findNearestRoad(grid, point.x, point.y)
+                                        startPoint = snapped ?: (point.x to point.y)
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TsuBlue,
+                                    contentColor = TsuWhite
+                                )
+                            ) {
+                                Text("Моё местоположение")
+                            }
+                        }
+
+                        item {
+                            Button(
+                                onClick = {
+                                    obstacleMode = !obstacleMode
+
+                                    if (obstacleMode) {
+                                        selectionMode = null
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TsuBlue,
+                                    contentColor = TsuWhite
+                                )
+                            ) {
+                                Text("Препятствия")
+                            }
+                        }
+
+                        item {
+                            Button(
+                                onClick = {
+                                    if (startPoint != null && endPoint != null) {
+                                        steps = aStarWithSteps(
+                                            grid,
+                                            startPoint!!,
+                                            endPoint!!,
+                                            obstacles
+                                        )
+                                        currentStep = 0
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TsuBlue,
+                                    contentColor = TsuWhite
+                                )
+                            ) {
+                                Text("Анимация")
+                            }
+                        }
+
+                        item {
+                            Button(
+                                onClick = {
+                                    aStarMode = false
+                                    selectionMode = null
+                                    path = emptyList()
+                                    obstacles.clear()
+                                    steps = emptyList()
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TsuBlue,
+                                    contentColor = TsuWhite
+                                )
+                            ) {
+                                Text("Назад")
                             }
                         }
                     } else {
-                        landmarks = landmarks.toMutableList().also {
-                            it[index] = it[index].copy(
-                                selected = !it[index].selected
-                            )
+                        item {
+                            Button(
+                                onClick = {
+                                    val roadPoints = snapPointsToRoad(grid, cafePoints.map { it.point })
+                                    centers = snapCentersToRoad(grid, initialCentersAStar)
+                                    println("$centers")
+                                    println("$roadPoints")
+                                    clusters = kMeans(roadPoints, centers, grid, DistanceMode.ASTAR)
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TsuBlue,
+                                    contentColor = TsuWhite
+                                )
+                            ) {
+                                Text("A*")
+                            }
+                        }
+
+                        item {
+                            Button(
+                                onClick = {
+                                    distanceMode = DistanceMode.EUCLIDEAN
+                                    centers = initialCentersEuclid
+                                    val roadPoints = snapPointsToRoad(grid, cafePoints.map { it.point })
+                                    clusters = kMeans(roadPoints, centers, grid, distanceMode)
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TsuBlue,
+                                    contentColor = TsuWhite
+                                )
+                            ) {
+                                Text("Евклидово")
+                            }
+                        }
+
+                        item {
+                            Button(
+                                onClick = {
+                                    clusterMode = false
+
+                                    clusters = emptyList()
+                                    differentPoints = emptyList()
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TsuBlue,
+                                    contentColor = TsuWhite
+                                )
+                            ) {
+                                Text("Назад")
+                            }
                         }
                     }
-                },
-                onStart = {
-                    val selected = landmarks.filter { it.selected }
+                }
+                if (showSheet) {
+                    LandmarkSelectionSheet(
+                        landmarks = landmarks,
+                        onToggle = { index ->
+                            val lm = landmarks[index]
 
-                    if (selected.size >= 2) {
+                            if (lm.isUserLocation) {
+                                getCurrentLocation(context) { lat, lng ->
 
-                        isAcoMode = true
+                                    val mappedPoint = mapLatLngToGrid(lat, lng, grid)
 
-                        startPoint = null
-                        endPoint = null
-                        path = emptyList()
+                                    println("GPS: $lat $lng -> GRID: ${mappedPoint.x}, ${mappedPoint.y}")
 
-                        path = antColonyPath(
-                            grid,
-                            selected.map { it.point }
-                        )
-                    }
+                                    val snapped = findNearestRoad(grid, mappedPoint.x, mappedPoint.y)
 
-                    showSheet = false
-                },
-                onClose = { showSheet = false }
-            )
+                                    val finalPoint = if (snapped != null) {
+                                        Point(snapped.first, snapped.second)
+                                    } else mappedPoint
+
+                                    landmarks = landmarks.toMutableList().also {
+                                        it[index] = it[index].copy(
+                                            selected = true,
+                                            point = finalPoint
+                                        )
+                                    }
+                                }
+                            } else {
+                                landmarks = landmarks.toMutableList().also {
+                                    it[index] = it[index].copy(
+                                        selected = !it[index].selected
+                                    )
+                                }
+                            }
+                        },
+                        onStart = {
+                            val selected = landmarks.filter { it.selected }
+
+                            if (selected.size >= 2) {
+
+                                isAcoMode = true
+
+                                startPoint = null
+                                endPoint = null
+                                path = emptyList()
+
+                                path = antColonyPath(
+                                    grid,
+                                    selected.map { it.point }
+                                )
+                            }
+
+                            showSheet = false
+                        },
+                        onClose = { showSheet = false }
+                    )
+                }
+            }
         }
     }
 }
