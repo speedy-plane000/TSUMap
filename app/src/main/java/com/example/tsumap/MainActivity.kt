@@ -532,6 +532,46 @@ fun MainMapScreen() {
 
                                     clusters.forEachIndexed { index, cluster ->
 
+                                        val fillColor = when (index) {
+                                            0 -> TsuBlue
+                                            1 -> Color.Red
+                                            2 -> Color.Green
+                                            else -> Color.Magenta
+                                        }
+                                        val hull = convexHull(cluster.points)
+                                        if (hull.size >= 3) {
+                                            val path = androidx.compose.ui.graphics.Path().apply {
+                                                val first = gridToScreenPx(
+                                                    hull[0].x + 0.5f,
+                                                    hull[0].y + 0.5f,
+                                                    grid[0].size,
+                                                    grid.size
+                                                )
+                                                moveTo(first.x, first.y)
+                                                for (i in 1 until hull.size) {
+                                                    val p = gridToScreenPx(
+                                                        hull[i].x + 0.5f,
+                                                        hull[i].y + 0.5f,
+                                                        grid[0].size,
+                                                        grid.size
+                                                    )
+                                                    lineTo(p.x, p.y)
+                                                }
+                                                close()
+                                            }
+
+                                            drawPath(
+                                                path = path,
+                                                color = fillColor.copy(alpha = 0.20f)
+                                            )
+
+                                            drawPath(
+                                                path = path,
+                                                color = fillColor.copy(alpha = 0.90f),
+                                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f)
+                                            )
+                                        }
+
                                         cluster.points.forEach { point ->
                                             val p = gridToScreenPx(point.x + 0.5f, point.y + 0.5f, grid[0].size, grid.size)
                                             val px = p.x

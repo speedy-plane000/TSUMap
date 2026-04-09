@@ -4,6 +4,31 @@ package com.example.tsumap
 import kotlin.math.abs
 
 
+fun convexHull(points: List<Point>): List<Point> {
+    if (points.size <= 2) return points.distinct()
+    fun cross(o: Point, a: Point, b: Point): Long =
+        (a.x - o.x).toLong() * (b.y - o.y) - (a.y - o.y).toLong() * (b.x - o.x)
+    val pts = points.distinct().sortedWith(compareBy<Point> { it.x }.thenBy { it.y })
+    if (pts.size <= 2) return pts
+    val lower = mutableListOf<Point>()
+    for (p in pts) {
+        while (lower.size >= 2 && cross(lower[lower.size - 2], lower[lower.size - 1], p) <= 0) {
+            lower.removeAt(lower.size - 1)
+        }
+        lower.add(p)
+    }
+    val upper = mutableListOf<Point>()
+    for (p in pts.asReversed()) {
+        while (upper.size >= 2 && cross(upper[upper.size - 2], upper[upper.size - 1], p) <= 0) {
+            upper.removeAt(upper.size - 1)
+        }
+        upper.add(p)
+    }
+    lower.removeAt(lower.size - 1)
+    upper.removeAt(upper.size - 1)
+    return lower + upper
+}
+
 enum class DistanceMode {
     EUCLIDEAN,
     ASTAR
@@ -35,30 +60,74 @@ fun kMeans(
     iterations: Int = 30
 ): List<Cluster>{
 
+    if (points.isEmpty() || centers.isEmpty()) return emptyList()
+
     val preparedPoints =
         if (mode == DistanceMode.ASTAR) snapPointsToRoad(grid, points) else points
-    val preparedCenters =
+
+    var currentCenters: List<Pair<Float,Float>> =
         if (mode == DistanceMode.ASTAR) snapCentersToRoad(grid, centers) else centers
-    val clusters = List(preparedCenters.size) { Cluster() }
-    for (p in preparedPoints) {
-        val nearestIndex = preparedCenters.indices.minByOrNull { i ->
-            val c = Point(
-                preparedCenters[i].first.toInt(),
-                preparedCenters[i].second.toInt()
-            )
-            val d = when (mode) {
-                DistanceMode.EUCLIDEAN -> euclidean(p, c)
-                DistanceMode.ASTAR -> aStarDistanceForCluster(grid, p, c)
+
+    val k = currentCenters.size
+    val clusters = List(k) {Cluster()}
+
+
+    fun centerAsPoint(i: Int): Point =
+        Point(currentCenters[i].first.toInt(), currentCenters[i].second.toInt())
+
+
+    repeat(iterations) {
+        clusters.forEach { it.points.clear() }
+        for (p in preparedPoints) {
+            val nearestIndex = (0 until k).minByOrNull { i ->
+                val c = centerAsPoint(i)
+                val d = when (mode) {
+                    DistanceMode.EUCLIDEAN -> euclidean(p, c)
+                    DistanceMode.ASTAR -> aStarDistanceForCluster(grid, p, c)
+                }
+                if (d == Double.MAX_VALUE) 1e18 else d
+            } ?: 0
+            clusters[nearestIndex].points.add(p)
+        }
+
+        val newCenters = MutableList(k) { 0f to 0f }
+
+        for (i in 0 until k) {
+            val pts = clusters[i].points
+
+            if (pts.isNotEmpty()) {
+                val meanX = pts.sumOf { it.x }.toFloat() / pts.size
+                val meanY = pts.sumOf { it.y }.toFloat() / pts.size
+                newCenters[i] = meanX to meanY
+
+            } else {
+
+                val farthestPoint = preparedPoints.maxByOrNull { p ->
+                    val nearestDist = (0 until k).minOf { j ->
+                        val c = centerAsPoint(j)
+                        when (mode) {
+                            DistanceMode.EUCLIDEAN -> euclidean(p, c)
+                            DistanceMode.ASTAR -> aStarDistanceForCluster(grid, p, c)
+                        }.let { d -> if (d == Double.MAX_VALUE) 1e18 else d }
+                    }
+                    nearestDist
+                } ?: preparedPoints.first()
+                newCenters[i] = farthestPoint.x.toFloat() to farthestPoint.y.toFloat()
             }
-            if (d == Double.MAX_VALUE) 1e9 else d
-        } ?: 0
-        clusters[nearestIndex].points.add(p)
+        }
+        currentCenters = if (mode == DistanceMode.ASTAR) {
+            snapCentersToRoad(grid, newCenters)
+        } else {
+            newCenters
+        }
+
     }
     clusters.forEachIndexed { i, cl ->
-        cl.centerX = preparedCenters[i].first
-        cl.centerY = preparedCenters[i].second
+        cl.centerX = currentCenters[i].first
+        cl.centerY = currentCenters[i].second
     }
     return clusters
+
 }
 
 
