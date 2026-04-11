@@ -78,10 +78,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        val train = MnistLoader.loadTrain(this)
-        println("MNIST loaded: ${train.images.size} images, size=${train.rows}x${train.cols}")
-        println("First 10 labels: ${train.labels.take(10)}")
-        println("First image first 20 pixels: ${train.images[0].take(20)}")
+        // Важно: не загружаем MNIST при старте Activity.
+        // Обучение/загрузка датасета запускайте отдельно (например, по кнопке и в фоне),
+        // иначе приложение может падать из-за блокировки UI-потока и/или нехватки памяти.
     }
 }
 
