@@ -78,10 +78,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        val train = MnistLoader.loadTrain(this)
-        println("MNIST loaded: ${train.images.size} images, size=${train.rows}x${train.cols}")
-        println("First 10 labels: ${train.labels.take(10)}")
-        println("First image first 20 pixels: ${train.images[0].take(20)}")
+        val sample = MnistLoader.loadTrainResized50(this, limit = 64)
+        println("MNIST sample loaded: ${sample.images.size} images, size=${sample.rows}x${sample.cols}")
+        println("First 10 labels: ${sample.labels.take(10)}")
     }
 }
 
