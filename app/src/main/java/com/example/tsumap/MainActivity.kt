@@ -77,6 +77,11 @@ class MainActivity : ComponentActivity() {
                 MainMapScreen()
             }
         }
+
+        val train = MnistLoader.loadTrain(this)
+        println("MNIST loaded: ${train.images.size} images, size=${train.rows}x${train.cols}")
+        println("First 10 labels: ${train.labels.take(10)}")
+        println("First image first 20 pixels: ${train.images[0].take(20)}")
     }
 }
 
