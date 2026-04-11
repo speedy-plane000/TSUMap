@@ -2,6 +2,7 @@ package com.example.tsumap
 
 import android.annotation.SuppressLint
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -30,13 +31,18 @@ import androidx.core.content.ContextCompat
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,15 +61,12 @@ import com.example.tsumap.ui.theme.TsuBlue
 import com.example.tsumap.ui.theme.TsuWhite
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.mutableFloatStateOf
 import com.google.android.gms.location.LocationServices
-import kotlin.collections.get
-import androidx.compose.ui.platform.LocalContext
-import com.example.tsumap.ParserCafesPoints
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -141,6 +144,9 @@ fun MainMapScreen() {
     var clusterMode by remember { mutableStateOf(false) }
     var centers by remember { mutableStateOf<List<Pair<Float, Float>>>(emptyList()) }
     var distanceMode by remember { mutableStateOf(DistanceMode.EUCLIDEAN) }
+    var showCafeSelectionDialog by remember { mutableStateOf(false) }
+    var selectedCafeForRating by remember { mutableStateOf<String?>(null) }
+    var showRatingDialog by remember { mutableStateOf(false) }
     val cafePoints = remember {
         listOf(
             CafePoint("Мария-Ра", Point(15, 4)),
@@ -162,6 +168,7 @@ fun MainMapScreen() {
             CafePoint("Ярче", Point(148, 144))
         )
     }
+    val cafeNamesForRating = remember { cafePoints.map { it.name } }
     val initialCentersEuclid = listOf(
         Point(92, 137),
         Point(104, 64),
@@ -643,6 +650,27 @@ fun MainMapScreen() {
                         Text("Муравьиный алгоритм")
                     }
                 }
+                item {
+                    Button(
+                        onClick = {
+                            clusterMode = false
+                            aStarMode = false
+                            isAcoMode = false
+                            selectionMode = null
+                            startPoint = null
+                            endPoint = null
+                            path = emptyList()
+                            steps = emptyList()
+                            showCafeSelectionDialog = true
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Оценка")
+                    }
+                }
             } else if (aStarMode) {
                 item {
                     Button(
@@ -861,6 +889,23 @@ fun MainMapScreen() {
                 onClose = { showSheet = false }
             )
         }
+        if (showRatingDialog && selectedCafeForRating != null) {
+            RatingDrawingDialog(
+                placeName = selectedCafeForRating!!,
+                onClose = { showRatingDialog = false }
+            )
+        }
+        if (showCafeSelectionDialog) {
+            CafeSelectionDialog(
+                cafeNames = cafeNamesForRating,
+                onSelect = { cafeName ->
+                    selectedCafeForRating = cafeName
+                    showCafeSelectionDialog = false
+                    showRatingDialog = true
+                },
+                onClose = { showCafeSelectionDialog = false }
+            )
+        }
     }
 }
 
@@ -977,6 +1022,231 @@ fun findNearestRoad(grid: Array<IntArray>, startX: Int, startY: Int): Pair<Int, 
 }
 
 @Composable
+fun CafeSelectionDialog(
+    cafeNames: List<String>,
+    onSelect: (String) -> Unit,
+    onClose: () -> Unit
+) {
+    Dialog(onDismissRequest = onClose) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = TsuWhite),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("Выберите заведение")
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 380.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(cafeNames.size) { index ->
+                        val cafe = cafeNames[index]
+                        Button(
+                            onClick = { onSelect(cafe) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = TsuBlue,
+                                contentColor = TsuWhite
+                            )
+                        ) {
+                            Text(cafe)
+                        }
+                    }
+                }
+                Button(
+                    onClick = onClose,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = TsuBlue,
+                        contentColor = TsuWhite
+                    )
+                ) {
+                    Text("Назад")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun RatingDrawingDialog(
+    placeName: String,
+    onClose: () -> Unit
+) {
+    val gridSize = 50
+    val pixels = remember { Array(gridSize) { BooleanArray(gridSize) } }
+    var redrawTrigger by remember { mutableStateOf(0) }
+    var predictedResult by remember { mutableStateOf<String?>(null) }
+    var lastDragCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
+    fun paintBrush(cellX: Int, cellY: Int) {
+        for (dy in -1..1) {
+            for (dx in -1..1) {
+                val nx = cellX + dx
+                val ny = cellY + dy
+                if (nx in 0 until gridSize && ny in 0 until gridSize) {
+                    pixels[ny][nx] = true
+                }
+            }
+        }
+        redrawTrigger++
+    }
+
+    fun paintLine(from: Pair<Int, Int>, to: Pair<Int, Int>) {
+        val dx = to.first - from.first
+        val dy = to.second - from.second
+        val steps = maxOf(kotlin.math.abs(dx), kotlin.math.abs(dy))
+        if (steps == 0) {
+            paintBrush(from.first, from.second)
+            return
+        }
+
+        for (step in 0..steps) {
+            val t = step.toFloat() / steps.toFloat()
+            val x = (from.first + dx * t).toInt().coerceIn(0, gridSize - 1)
+            val y = (from.second + dy * t).toInt().coerceIn(0, gridSize - 1)
+            paintBrush(x, y)
+        }
+    }
+
+    fun clearCanvas() {
+        for (y in 0 until gridSize) {
+            for (x in 0 until gridSize) {
+                pixels[y][x] = false
+            }
+        }
+        predictedResult = null
+        redrawTrigger++
+    }
+
+    Dialog(onDismissRequest = onClose) {
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = TsuWhite
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("Оценка: $placeName")
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                ) {
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.White)
+                            .pointerInput(Unit) {
+                                detectTapGestures { offset ->
+                                    val cellSize = size.width / gridSize
+                                    val cellX = (offset.x / cellSize).toInt().coerceIn(0, gridSize - 1)
+                                    val cellY = (offset.y / cellSize).toInt().coerceIn(0, gridSize - 1)
+                                    paintBrush(cellX, cellY)
+                                }
+                            }
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragStart = { startOffset ->
+                                        val cellSize = size.width / gridSize
+                                        val sx = (startOffset.x / cellSize).toInt().coerceIn(0, gridSize - 1)
+                                        val sy = (startOffset.y / cellSize).toInt().coerceIn(0, gridSize - 1)
+                                        val startCell = sx to sy
+                                        paintBrush(sx, sy)
+                                        lastDragCell = startCell
+                                    },
+                                    onDragEnd = { lastDragCell = null },
+                                    onDragCancel = { lastDragCell = null }
+                                ) { change, _ ->
+                                    val cellSize = size.width / gridSize
+                                    val cellX =
+                                        (change.position.x / cellSize).toInt().coerceIn(0, gridSize - 1)
+                                    val cellY =
+                                        (change.position.y / cellSize).toInt().coerceIn(0, gridSize - 1)
+                                    val currentCell = cellX to cellY
+                                    val previousCell = lastDragCell
+                                    if (previousCell != null) {
+                                        paintLine(previousCell, currentCell)
+                                    } else {
+                                        paintBrush(cellX, cellY)
+                                    }
+                                    lastDragCell = currentCell
+                                }
+                            }
+                    ) {
+                        redrawTrigger
+                        val cellWidth = size.width / gridSize
+                        val cellHeight = size.height / gridSize
+
+                        for (y in 0 until gridSize) {
+                            for (x in 0 until gridSize) {
+                                drawRect(
+                                    color = if (pixels[y][x]) Color.Black else Color.White,
+                                    topLeft = Offset(x * cellWidth, y * cellHeight),
+                                    size = androidx.compose.ui.geometry.Size(cellWidth, cellHeight)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (predictedResult != null) {
+                    Text(predictedResult!!)
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Button(
+                        onClick = {
+                            predictedResult = "Результат: нейросеть будет подключена позже"
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Оценить")
+                    }
+                    Button(
+                        onClick = { clearCanvas() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Стереть")
+                    }
+                }
+                Button(
+                    onClick = onClose,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = TsuBlue,
+                        contentColor = TsuWhite
+                    )
+                ) {
+                    Text("Назад")
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
 fun Greeting(name: String, modifier: Modifier = Modifier) {
     Text(
         text = "Hello $name!",
@@ -1057,7 +1327,3 @@ fun LandmarkSelectionSheet(
         }
     }
 }
-
-
-
-
