@@ -317,14 +317,22 @@ val rng = Random(42)
 val n = train.images.size
 val indices = IntArray(n) { it }
 
+val totalBatches = (n + batchSize - 1) / batchSize
+val progressStep = 50  // print progress every N batches
+
 println("\nStarting training: $epochs epochs, batchSize=$batchSize, lr=$learningRate")
+println("Total batches per epoch: $totalBatches")
 println("=".repeat(60))
+
+val trainingStartMs = System.currentTimeMillis()
 
 for (epoch in 1..epochs) {
     MathOps.shuffleInPlace(indices, rng)
     var lossSum = 0f
     var steps = 0
     var start = 0
+    val epochStartMs = System.currentTimeMillis()
+
     while (start < n) {
         val end = minOf(start + batchSize, n)
         val bs = end - start
@@ -333,18 +341,27 @@ for (epoch in 1..epochs) {
         lossSum += model.trainOnBatch(batchX, batchY, learningRate)
         steps++
         start = end
+
+        if (steps % progressStep == 0 || steps == totalBatches) {
+            val pct = steps * 100 / totalBatches
+            val avgLoss = lossSum / steps
+            print("\rEpoch $epoch/$epochs  [batch $steps/$totalBatches  $pct%%]  loss=%.4f".format(avgLoss))
+            System.out.flush()
+        }
     }
 
+    val epochSec = (System.currentTimeMillis() - epochStartMs) / 1000.0
     val trainAcc = evaluateAccuracy(model, train.images, train.labels)
     val testAcc  = evaluateAccuracy(model, test.images,  test.labels)
     println(
-        "Epoch %d/%d  loss=%.4f  train_acc=%.4f  test_acc=%.4f"
-            .format(epoch, epochs, lossSum / steps, trainAcc, testAcc)
+        "\rEpoch %d/%d  loss=%.4f  train_acc=%.4f  test_acc=%.4f  (%.1fs)"
+            .format(epoch, epochs, lossSum / steps, trainAcc, testAcc, epochSec)
     )
 }
 
+val totalSec = (System.currentTimeMillis() - trainingStartMs) / 1000.0
 println("=".repeat(60))
-println("Training complete!")
+println("Training complete! Total time: %.1fs".format(totalSec))
 
 val modelFile = File(projectRoot, "app/src/main/assets/digit_model.bin")
 model.saveToFile(modelFile)
