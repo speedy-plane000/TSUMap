@@ -99,6 +99,11 @@ class DenseLayer(
         for (j in 0 until outputSize) bias[j] -= learningRate * gradB[j] * scale
         return gradInput
     }
+
+    fun getWeights(): FloatArray = weights.copyOf()
+    fun getBias(): FloatArray = bias.copyOf()
+    fun setWeights(w: FloatArray) { w.copyInto(weights) }
+    fun setBias(b: FloatArray) { b.copyInto(bias) }
 }
 
 class ReLULayer {
@@ -188,6 +193,27 @@ class DigitClassifier(
         val a1 = relu.forward(z1)
         val logits = dense2.forward(a1)
         return IntArray(inputs.size) { i -> MathOps.argMax(logits[i]) }
+    }
+
+    fun saveToFile(file: java.io.File) {
+        java.io.DataOutputStream(java.io.BufferedOutputStream(java.io.FileOutputStream(file))).use { out ->
+            out.writeInt(1) // формат версии
+            for (w in dense1.getWeights()) out.writeFloat(w)
+            for (b in dense1.getBias())    out.writeFloat(b)
+            for (w in dense2.getWeights()) out.writeFloat(w)
+            for (b in dense2.getBias())    out.writeFloat(b)
+        }
+    }
+
+    fun loadFromFile(file: java.io.File) {
+        java.io.DataInputStream(java.io.BufferedInputStream(java.io.FileInputStream(file))).use { inp ->
+            val version = inp.readInt()
+            require(version == 1) { "Unknown model version: $version" }
+            dense1.setWeights(FloatArray(dense1.getWeights().size) { inp.readFloat() })
+            dense1.setBias(FloatArray(dense1.getBias().size) { inp.readFloat() })
+            dense2.setWeights(FloatArray(dense2.getWeights().size) { inp.readFloat() })
+            dense2.setBias(FloatArray(dense2.getBias().size) { inp.readFloat() })
+        }
     }
 }
 
@@ -319,3 +345,7 @@ for (epoch in 1..epochs) {
 
 println("=".repeat(60))
 println("Training complete!")
+
+val modelFile = File(projectRoot, "app/src/main/assets/digit_model.bin")
+model.saveToFile(modelFile)
+println("Model saved to: ${modelFile.absolutePath}")
