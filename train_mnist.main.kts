@@ -276,10 +276,10 @@ for (f in listOf(trainImages, trainLabels, testImages, testLabels)) {
     }
 }
 
-println("Loading training data (10 000 samples)...")
+println("Loading training data (10_000 samples)...")
 val train = loadMnist(trainImages, trainLabels, limit = 10_000)
 
-println("Loading test data (2 000 samples)...")
+println("Loading test data (2_000 samples)...")
 val test = loadMnist(testImages, testLabels, limit = 2_000)
 
 val model = DigitClassifier(inputSize = 50 * 50, hiddenSize = 128, numClasses = 10, seed = 42)
