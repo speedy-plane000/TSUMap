@@ -77,10 +77,6 @@ class MainActivity : ComponentActivity() {
                 MainMapScreen()
             }
         }
-
-        val sample = MnistLoader.loadTrainResized50(this, limit = 64)
-        println("MNIST sample loaded: ${sample.images.size} images, size=${sample.rows}x${sample.cols}")
-        println("First 10 labels: ${sample.labels.take(10)}")
     }
 }
 
