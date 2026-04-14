@@ -136,6 +136,13 @@ fun MainMapScreen() {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var showRoads by remember { mutableStateOf(false) }
+    var geneticMode by remember { mutableStateOf(false) }
+    var showGeneticItemsSheet by remember { mutableStateOf(false) }
+    var geneticStartPoint by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var geneticStops by remember { mutableStateOf<List<Point>>(emptyList()) }
+    var selectedNeeds by remember { mutableStateOf(setOf<String>()) }
+    var geneticUiMode by remember { mutableStateOf(false) }
+    var geneticHintText by remember { mutableStateOf<String?>(null) }
     var startPoint by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var endPoint by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var selectionMode by remember { mutableStateOf<String?>(null) }
@@ -224,6 +231,18 @@ fun MainMapScreen() {
             scale = newScale
         }
 
+        if (geneticHintText != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 16.dp)
+                    .background(TsuWhite.copy(alpha = 0.9f), CircleShape)
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            ) {
+                Text(geneticHintText!!, color = TsuBlue)
+            }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -298,6 +317,11 @@ fun MainMapScreen() {
                                 )
                             } else if (selectionMode == "end") {
                                 endPoint = finalX to finalY
+                            } else if (selectionMode == "genetic_start"){
+                                geneticStartPoint = finalX to finalY
+                                selectionMode = null
+                                geneticHintText = null
+                                showGeneticItemsSheet = true
                             }
 
                             steps = emptyList()
@@ -331,7 +355,8 @@ fun MainMapScreen() {
                     obstacles.isNotEmpty() ||
                     (aStarMode && path.isNotEmpty()) ||
                     (clusterMode && clusters.isNotEmpty()) ||
-                    (isAcoMode && landmarks.any { it.selected })
+                    (isAcoMode && landmarks.any { it.selected }) ||
+                    (geneticMode && path.isNotEmpty())
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         redrawTrigger
@@ -569,6 +594,50 @@ fun MainMapScreen() {
                         }
                     }
                 }
+                if (geneticMode) {
+                    geneticStartPoint?.let { (x, y) ->
+                        val px = startX + (x + 0.5f) / grid[0].size * actualVisualWidth
+                        val py = startY + (y + 0.5f) / grid.size * actualVisualHeight
+                        val r = with(density) { (10.dp).toPx() }
+
+                        Box(
+                            modifier = Modifier
+                                .offset { IntOffset((px - r).toInt(), (py - r).toInt()) }
+                                .size(20.dp)
+                                .background(TsuWhite, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .background(TsuBlue, CircleShape)
+                            )
+                        }
+                    }
+
+                    geneticStops.forEachIndexed { index, p ->
+                        val px = startX + (p.x + 0.5f) / grid[0].size * actualVisualWidth
+                        val py = startY + (p.y + 0.5f) / grid.size * actualVisualHeight
+                        val r = with(density) { (12.dp).toPx() }
+
+                        Box(
+                            modifier = Modifier
+                                .offset { IntOffset((px - r).toInt(), (py - r).toInt()) }
+                                .size(24.dp)
+                                .background(TsuWhite, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .background(TsuBlue, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text((index + 1).toString(), color = TsuWhite)
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -579,9 +648,38 @@ fun MainMapScreen() {
                 .padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            if (geneticUiMode) {
+                item {
+                    Button(
+                        onClick = { showGeneticItemsSheet = true },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) { Text("Поменять товары") }
+                }
 
-            if (!clusterMode  && !aStarMode) {
+                item {
+                    Button(
+                        onClick = {
+                            geneticUiMode = false
+                            geneticMode = false
+                            selectionMode = null
+                            geneticHintText = null
+                            showGeneticItemsSheet = false
 
+                            path = emptyList()
+                            geneticStops = emptyList()
+                            geneticStartPoint = null
+                            selectedNeeds = emptySet()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) { Text("Назад") }
+                }
+            } else if (!clusterMode && !aStarMode) {
                 item {
                     Button(
                         onClick = { showRoads = !showRoads },
@@ -636,6 +734,68 @@ fun MainMapScreen() {
                         )
                     ) {
                         Text("Кластеры")
+                    }
+                }
+
+                item {
+                    Button(
+                        onClick = {
+                            aStarMode = false
+                            clusterMode = false
+                            isAcoMode = false
+                            geneticMode = false
+
+                            path = emptyList()
+                            geneticStops = emptyList()
+                            startPoint = null
+                            endPoint = null
+                            steps = emptyList()
+
+                            selectionMode = "genetic_start"
+                            geneticStartPoint = null
+                            selectedNeeds = emptySet()
+
+                            geneticUiMode = true
+                            geneticHintText = "Выберите точку старта для генетического маршрута"
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Генетический")
+                    }
+                }
+                if (geneticUiMode) {
+                    item {
+                        Button(
+                            onClick = { showGeneticItemsSheet = true },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = TsuBlue,
+                                contentColor = TsuWhite
+                            )
+                        ) { Text("Поменять товары") }
+                    }
+
+                    item {
+                        Button(
+                            onClick = {
+                                geneticUiMode = false
+                                geneticMode = false
+                                selectionMode = null
+                                geneticHintText = null
+                                showGeneticItemsSheet = false
+
+                                path = emptyList()
+                                geneticStops = emptyList()
+                                geneticStartPoint = null
+                                selectedNeeds = emptySet()
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = TsuBlue,
+                                contentColor = TsuWhite
+                            )
+                        ) { Text("Назад") }
                     }
                 }
 
@@ -887,6 +1047,41 @@ fun MainMapScreen() {
                     showSheet = false
                 },
                 onClose = { showSheet = false }
+            )
+        }
+        if (showGeneticItemsSheet) {
+            GeneticItemsSheet(
+                selected = selectedNeeds,
+                onToggle = { key ->
+                    selectedNeeds = if (key in selectedNeeds) selectedNeeds - key else selectedNeeds + key
+                },
+                onStart = onStart@{
+                    val start = geneticStartPoint ?: run {
+                        showGeneticItemsSheet = false
+                        return@onStart
+                    }
+
+                    val needTags = itemTagsToNeed(selectedNeeds)
+                    if (needTags.isEmpty()) {
+                        showGeneticItemsSheet = false
+                        return@onStart
+                    }
+
+                    val result = buildGeneticPathOnGrid(
+                        grid = grid,
+                        start = Point(start.first, start.second),
+                        allCatalog = foodVenuesCatalog(),
+                        need = needTags
+                    )
+
+                    path = result.path
+                    geneticStops = result.stops
+                    geneticMode = true
+                    showGeneticItemsSheet = false
+                    geneticUiMode = true
+                    geneticHintText = null
+                },
+                onClose = { showGeneticItemsSheet = false }
             )
         }
         if (showRatingDialog && selectedCafeForRating != null) {
@@ -1324,6 +1519,72 @@ fun LandmarkSelectionSheet(
             ) {
                 Text("Закрыть")
             }
+        }
+    }
+}
+@Composable
+fun GeneticItemsSheet(
+    selected: Set<String>,
+    onToggle: (String) -> Unit,
+    onStart: () -> Unit,
+    onClose: () -> Unit
+) {
+    val items = listOf(
+        "Одноразка",
+        "Рамен/Вок/Рис",
+        "Шаурма",
+        "Выпечка",
+        "Напитки",
+        "Снеки",
+        "Кофе",
+        "Комплексный обед",
+        "Блины",
+        "Фастфуд"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .padding(16.dp)
+    ) {
+        Column {
+            Text("Выберите, что купить")
+
+            items.forEach { item ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = item in selected,
+                        onCheckedChange = { onToggle(item) },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = TsuBlue,
+                            uncheckedColor = TsuBlue
+                        )
+                    )
+                    Text(item, modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+
+            Button(
+                onClick = onStart,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TsuBlue,
+                    contentColor = TsuWhite
+                )
+            ) { Text("Построить маршрут") }
+
+            Button(
+                onClick = onClose,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TsuBlue,
+                    contentColor = TsuWhite
+                )
+            ) { Text("Закрыть") }
         }
     }
 }
