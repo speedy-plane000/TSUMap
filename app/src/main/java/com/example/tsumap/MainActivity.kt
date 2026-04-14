@@ -71,6 +71,11 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -132,10 +137,16 @@ fun MainMapScreen() {
         ))
     }
 
+
     var obstacles by remember { mutableStateOf(mutableSetOf<Pair<Int, Int>>()) }
     var redrawTrigger by remember { mutableStateOf(0) }
     var obstacleMode by remember { mutableStateOf(false) }
     var aStarMode by remember { mutableStateOf(false) }
+    var geneticMode by remember { mutableStateOf( false) }
+    var showGeneticItemsSheet by remember { mutableStateOf(false) }
+    var geneticStartPoint by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var geneticStops by remember {mutableStateOf<List<Point>>(emptyList())}
+    var selectedNeeds by remember { mutableStateOf(setOf<String>()) }
     var showSheet by remember { mutableStateOf(false) }
     var isMenuExpanded by remember { mutableStateOf(false) }
     var isAcoMode by remember { mutableStateOf(false) }
@@ -183,6 +194,7 @@ fun MainMapScreen() {
         Point(101, 6)
     ).map { it.x.toFloat() to it.y.toFloat() }
 
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier.fillMaxSize()
@@ -222,6 +234,7 @@ fun MainMapScreen() {
                             clusterMode = false
                             isAcoMode = false
                             path = emptyList()
+                            geneticStops = emptyList()
                             startPoint = null
                             endPoint = null
                             selectionMode = null
@@ -237,6 +250,7 @@ fun MainMapScreen() {
                             aStarMode = false
                             isAcoMode = false
                             path = emptyList()
+                            geneticStops = emptyList()
                             startPoint = null
                             endPoint = null
                             selectionMode = null
@@ -252,6 +266,7 @@ fun MainMapScreen() {
                             clusterMode = false
                             isAcoMode = false
                             path = emptyList()
+                            geneticStops = emptyList()
                             startPoint = null
                             endPoint = null
                             selectionMode = null
@@ -264,6 +279,22 @@ fun MainMapScreen() {
                         text = { Text("Генетический") },
                         onClick = {
                             isMenuExpanded = false
+
+                            aStarMode = false
+                            clusterMode = false
+                            isAcoMode = false
+                            geneticMode = false
+
+                            path = emptyList()
+                            geneticStops = emptyList()
+                            steps = emptyList()
+                            startPoint = null
+                            endPoint = null
+
+
+                            selectionMode = "genetic_start"
+                            geneticStartPoint = null
+                            selectedNeeds = emptySet()
                         }
                     )
                     DropdownMenuItem(
@@ -454,6 +485,10 @@ fun MainMapScreen() {
                                         )
                                     } else if (selectionMode == "end") {
                                         endPoint = finalX to finalY
+                                    }else if(selectionMode == "genetic_start"){
+                                        geneticStartPoint = finalX to finalY
+                                        selectionMode = null
+                                        showGeneticItemsSheet = true
                                     }
 
                                     steps = emptyList()
@@ -492,7 +527,8 @@ fun MainMapScreen() {
                             obstacles.isNotEmpty() ||
                             (aStarMode && path.isNotEmpty()) ||
                             (clusterMode && clusters.isNotEmpty()) ||
-                            (isAcoMode && landmarks.any { it.selected })
+                            (isAcoMode && landmarks.any { it.selected }) ||
+                            (geneticMode && path.isNotEmpty())
                         ) {
                             Canvas(modifier = Modifier.fillMaxSize()) {
                                 redrawTrigger
@@ -684,6 +720,7 @@ fun MainMapScreen() {
                                         drawCircle(color = TsuBlue.copy(alpha = 0.25f), radius = 4f, center = p)
                                     }
                                 }
+
                             }
                         }
 
@@ -746,6 +783,63 @@ fun MainMapScreen() {
                                 }
                             }
                         }
+                        if (geneticMode && geneticStops.isNotEmpty()) {
+                            if (geneticMode) {
+                                geneticStartPoint?.let { (x, y) ->
+                                    val p = gridToScreenPx(x + 0.5f, y + 0.5f, grid[0].size, grid.size)
+                                    val startSize = 20.dp
+                                    val startRadiusPx = with(density) { (startSize / 2).toPx() }
+                                    Box(
+                                        modifier = Modifier
+                                            .offset {
+                                                IntOffset(
+                                                    (p.x - startRadiusPx).toInt(),
+                                                    (p.y - startRadiusPx).toInt()
+                                                )
+                                            }
+                                            .size(startSize)
+                                            .background(TsuWhite, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(12.dp)
+                                                .background(TsuBlue, CircleShape)
+                                        )
+                                    }
+                                }
+                            }
+                            geneticStops.forEachIndexed { index, point ->
+                                val p = gridToScreenPx(point.x + 0.5f, point.y + 0.5f, grid[0].size, grid.size)
+                                val outerSize = 24.dp
+                                val innerSize = 18.dp
+                                val outerRadiusPx = with(density) { (outerSize / 2).toPx() }
+                                Box(
+                                    modifier = Modifier
+                                        .offset {
+                                            IntOffset(
+                                                (p.x - outerRadiusPx).toInt(),
+                                                (p.y - outerRadiusPx).toInt()
+                                            )
+                                        }
+                                        .size(outerSize)
+                                        .background(TsuWhite, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(innerSize)
+                                            .background(TsuBlue, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = (index + 1).toString(),
+                                            color = TsuWhite,
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -782,6 +876,7 @@ fun MainMapScreen() {
                                     isAcoMode = false
 
                                     path = emptyList()
+                                    geneticStops = emptyList()
                                     startPoint = null
                                     endPoint = null
                                     selectionMode = null
@@ -804,6 +899,7 @@ fun MainMapScreen() {
                                     isAcoMode = false
 
                                     path = emptyList()
+                                    geneticStops = emptyList()
                                     startPoint = null
                                     endPoint = null
                                     selectionMode = null
@@ -927,6 +1023,7 @@ fun MainMapScreen() {
                                     aStarMode = false
                                     selectionMode = null
                                     path = emptyList()
+                                    geneticStops = emptyList()
                                     obstacles.clear()
                                     steps = emptyList()
                                 },
@@ -944,8 +1041,6 @@ fun MainMapScreen() {
                                 onClick = {
                                     val roadPoints = snapPointsToRoad(grid, cafePoints.map { it.point })
                                     centers = snapCentersToRoad(grid, initialCentersAStar)
-                                    println("$centers")
-                                    println("$roadPoints")
                                     clusters = kMeans(roadPoints, centers, grid, DistanceMode.ASTAR)
                                 },
                                 colors = ButtonDefaults.buttonColors(
@@ -1036,6 +1131,7 @@ fun MainMapScreen() {
                                 startPoint = null
                                 endPoint = null
                                 path = emptyList()
+                                geneticStops = emptyList()
 
                                 path = antColonyPath(
                                     grid,
@@ -1046,6 +1142,85 @@ fun MainMapScreen() {
                             showSheet = false
                         },
                         onClose = { showSheet = false }
+                    )
+                }
+                if (showGeneticItemsSheet) {
+                    GeneticItemsSheet(
+                        selected = selectedNeeds,
+                        onToggle = { key ->
+                            selectedNeeds = if (key in selectedNeeds) selectedNeeds - key else selectedNeeds + key
+                        },
+                        onStart = onStart@{
+                            val start = geneticStartPoint ?: run {
+                                showGeneticItemsSheet = false
+                                return@onStart
+                            }
+
+                            val needTags = itemTagsToNeed(selectedNeeds)
+                            if (needTags.isEmpty()) {
+                                showGeneticItemsSheet = false
+                                return@onStart
+                            }
+
+                            showGeneticItemsSheet = false
+                            geneticMode = true
+                            path = emptyList()
+                            geneticStops = emptyList()
+
+                            scope.launch(Dispatchers.Default) {
+                                val startPoint = Point(start.first, start.second)
+                                val snappedStartPair = findNearestRoad(grid, startPoint.x, startPoint.y)
+                                val snappedStart = if (snappedStartPair != null) {
+                                    Point(snappedStartPair.first, snappedStartPair.second)
+                                } else {
+                                    startPoint
+                                }
+
+                                val rawCandidates = candidatesFor(needTags, foodVenuesCatalog())
+                                val candidates = rawCandidates.map { place ->
+                                    val s = findNearestRoad(grid, place.point.x, place.point.y)
+                                    if (s != null) place.copy(point = Point(s.first, s.second)) else place
+                                }
+
+                                if (candidates.isEmpty()) {
+                                    withContext(Dispatchers.Main) {
+                                        path = emptyList()
+                                        geneticStops = emptyList()
+                                    }
+                                    return@launch
+                                }
+
+                                val config = RouteConfig(kmPerGridUnit = 0.01)
+
+                                val (finalEval, _) = runGeneticAlgorithm(
+                                    startPoint = snappedStart,
+                                    startTime = java.time.LocalDateTime.now(),
+                                    need = needTags,
+                                    venues = candidates,
+                                    config = config,
+                                    onGeneration = { _, bestEval, _ ->
+                                        val stops = bestEval.visitedOrder.map { idx -> candidates[idx].point }
+                                        val previewPath = stitchAstarPath(grid, snappedStart, stops)
+
+                                        scope.launch(Dispatchers.Main) {
+                                            path = previewPath
+                                            geneticStops = stops
+                                        }
+
+                                        Thread.sleep(100)
+                                    }
+                                )
+
+                                val finalStops = finalEval.visitedOrder.map { idx -> candidates[idx].point }
+                                val finalPath = stitchAstarPath(grid, snappedStart, finalStops)
+
+                                withContext(Dispatchers.Main) {
+                                    path = finalPath
+                                    geneticStops = finalStops
+                                }
+                            }
+                        },
+                        onClose = { showGeneticItemsSheet = false }
                     )
                 }
             }
@@ -1243,6 +1418,64 @@ fun LandmarkSelectionSheet(
             ) {
                 Text("Закрыть")
             }
+        }
+    }
+}
+
+@Composable
+fun GeneticItemsSheet(
+    selected: Set<String>,
+    onToggle: (String) -> Unit,
+    onStart: () -> Unit,
+    onClose: () -> Unit
+) {
+    val items = listOf(
+        "Одноразовая посуда",
+        "Рамен/Вок/Рис",
+        "Шаурма",
+        "Выпечка",
+        "Напитки",
+        "Снеки",
+        "Кофе",
+        "Комплексный обед",
+        "Блины",
+        "Фастфуд"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .padding(16.dp)
+    ) {
+        Column {
+            Text("Выберите, что купить")
+            items.forEach { item ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = item in selected,
+                        onCheckedChange = { onToggle(item) },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = TsuBlue,
+                            uncheckedColor = TsuBlue
+                        )
+                    )
+                    Text(item, modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+
+            Button(
+                onClick = onStart,
+                colors = ButtonDefaults.buttonColors(containerColor = TsuBlue, contentColor = TsuWhite)
+            ) { Text("Запустить генетический") }
+
+            Button(
+                onClick = onClose,
+                colors = ButtonDefaults.buttonColors(containerColor = TsuBlue, contentColor = TsuWhite)
+            ) { Text("Закрыть") }
         }
     }
 }
