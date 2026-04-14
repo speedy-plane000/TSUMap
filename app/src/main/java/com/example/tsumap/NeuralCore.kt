@@ -94,6 +94,11 @@ class DenseLayer(
 
         return gradInput
     }
+
+    fun getWeights(): FloatArray = weights.copyOf()
+    fun getBias(): FloatArray = bias.copyOf()
+    fun setWeights(w: FloatArray) { w.copyInto(weights) }
+    fun setBias(b: FloatArray) { b.copyInto(bias) }
 }
 
 class ReLULayer {
@@ -210,5 +215,18 @@ class DigitClassifier(
         val a1 = relu.forward(z1)
         val logits = dense2.forward(a1)
         return IntArray(inputs.size) { i -> MathOps.argMax(logits[i]) }
+    }
+
+    fun loadFromAssets(context: android.content.Context, fileName: String = "digit_model.bin") {
+        java.io.DataInputStream(
+            java.io.BufferedInputStream(context.assets.open(fileName))
+        ).use { inp ->
+            val version = inp.readInt()
+            require(version == 1) { "Unknown model version: $version" }
+            dense1.setWeights(FloatArray(dense1.getWeights().size) { inp.readFloat() })
+            dense1.setBias(FloatArray(dense1.getBias().size) { inp.readFloat() })
+            dense2.setWeights(FloatArray(dense2.getWeights().size) { inp.readFloat() })
+            dense2.setBias(FloatArray(dense2.getBias().size) { inp.readFloat() })
+        }
     }
 }

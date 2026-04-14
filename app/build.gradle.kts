@@ -37,6 +37,9 @@ android {
     buildFeatures {
         compose = true
     }
+    aaptOptions {
+        ignoreAssetsPattern = "!.svn:!.git:.*:!CVS:!thumbs.db:!picasa.ini:!*.scc:*~:mnist"
+    }
 }
 
 dependencies {
