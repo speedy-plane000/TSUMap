@@ -88,9 +88,27 @@ fun MainMapScreen() {
     LaunchedEffect(Unit) {
         requestLocationPermission(context)
     }
+    var decisionTreeMode by remember { mutableStateOf(false) }
+    var decisionTreeRoot by remember { mutableStateOf<DecisionNode?>(null) }
+    var decisionTreeCurrentNode by remember { mutableStateOf<DecisionNode?>(null) }
+    var decisionTreeAnswers by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var decisionTreePath by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var decisionTreeResult by remember { mutableStateOf<String?>(null) }
     var steps by remember { mutableStateOf<List<AStarStep>>(emptyList()) }
     var currentStep by remember { mutableStateOf(0) }
     var path by remember { mutableStateOf<List<Pair<Int, Int>>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        val rows = loadTrainingRows(context, "data.csv")
+        if (rows.isNotEmpty()) {
+            val features = rows.first().features.keys.toList()
+            val root = trainDecisionTree(rows, features, forceRootFeature = "food_type")
+            decisionTreeRoot = root
+            decisionTreeCurrentNode = root
+        }
+    }
+
+
     LaunchedEffect(steps) {
         if (steps.isNotEmpty()) {
             for (i in steps.indices) {
@@ -126,6 +144,7 @@ fun MainMapScreen() {
             Landmark("Стрит-арт Хамелеон", Point(141, 47))
         ))
     }
+
 
     var obstacles by remember { mutableStateOf(mutableSetOf<Pair<Int, Int>>()) }
     var redrawTrigger by remember { mutableStateOf(0) }
@@ -766,39 +785,37 @@ fun MainMapScreen() {
                         Text("Генетический")
                     }
                 }
-                if (geneticUiMode) {
-                    item {
-                        Button(
-                            onClick = { showGeneticItemsSheet = true },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = TsuBlue,
-                                contentColor = TsuWhite
-                            )
-                        ) { Text("Поменять товары") }
-                    }
+                item {
+                    Button(
+                        onClick = {
 
-                    item {
-                        Button(
-                            onClick = {
-                                geneticUiMode = false
-                                geneticMode = false
-                                selectionMode = null
-                                geneticHintText = null
-                                showGeneticItemsSheet = false
+                            aStarMode = false
+                            clusterMode = false
+                            isAcoMode = false
+                            geneticMode = false
+                            geneticUiMode = false
+                            showSheet = false
+                            showGeneticItemsSheet = false
 
-                                path = emptyList()
-                                geneticStops = emptyList()
-                                geneticStartPoint = null
-                                selectedNeeds = emptySet()
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = TsuBlue,
-                                contentColor = TsuWhite
-                            )
-                        ) { Text("Назад") }
+
+                            path = emptyList()
+                            steps = emptyList()
+                            obstacles.clear()
+                            startPoint = null
+                            endPoint = null
+                            selectionMode = null
+
+
+                            decisionTreeMode = true
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Дерево решений")
                     }
                 }
-
                 item {
                     Button(
                         onClick = { showSheet = true },
@@ -1082,6 +1099,18 @@ fun MainMapScreen() {
                     geneticHintText = null
                 },
                 onClose = { showGeneticItemsSheet = false }
+            )
+        }
+        if (decisionTreeMode) {
+            DecisionTreeChatScreen(
+                root = decisionTreeRoot,
+                onExit = {
+                    decisionTreeMode = false
+                    decisionTreeCurrentNode = decisionTreeRoot
+                    decisionTreeAnswers = emptyMap()
+                    decisionTreePath = emptyList()
+                    decisionTreeResult = null
+                }
             )
         }
         if (showRatingDialog && selectedCafeForRating != null) {
@@ -1457,7 +1486,214 @@ fun GreetingPreview() {
     }
 }
 
+@Composable
+fun DecisionTreeChatScreen(
+    root: DecisionNode?,
+    onExit: () -> Unit
+) {
+    data class ChatMsg(val text: String, val fromUser: Boolean)
 
+    var currentNode by remember(root) { mutableStateOf(root) }
+    var result by remember(root) { mutableStateOf<String?>(null) }
+    var chat by remember(root) { mutableStateOf(listOf<ChatMsg>()) }
+
+
+    LaunchedEffect(root) {
+        chat = emptyList()
+        result = null
+        currentNode = root
+
+        when (val node = currentNode) {
+            is DecisionNode.Split -> {
+                chat = chat + ChatMsg(featureRu(node.feature), fromUser = false)
+            }
+            is DecisionNode.Leaf -> {
+                result = node.prediction
+                chat = chat + ChatMsg("Рекомендованное место: ${node.prediction}", fromUser = false)
+            }
+            null -> {
+                chat = chat + ChatMsg("Дерево не загружено", fromUser = false)
+            }
+        }
+    }
+
+    fun answer(value: String) {
+        val node = currentNode
+        if (node !is DecisionNode.Split) return
+
+
+        chat = chat + ChatMsg(valueRu(value), fromUser = true)
+
+        val next = node.children[value] ?: DecisionNode.Leaf(node.majorityLabel)
+        currentNode = next
+
+        when (next) {
+            is DecisionNode.Split -> {
+                chat = chat + ChatMsg(featureRu(next.feature), fromUser = false)
+            }
+            is DecisionNode.Leaf -> {
+                result = next.prediction
+                chat = chat + ChatMsg("Рекомендованное место: ${next.prediction}", fromUser = false)
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(TsuWhite)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(TsuBlue)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Дерево решений", color = TsuWhite)
+                Button(
+                    onClick = onExit,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = TsuWhite,
+                        contentColor = TsuBlue
+                    )
+                ) { Text("Выйти") }
+            }
+
+
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(chat.size) { i ->
+                    val msg = chat[i]
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = if (msg.fromUser) Arrangement.End else Arrangement.Start
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    color = if (msg.fromUser) TsuBlue else Color(0xFFEAEAEA),
+                                    shape = CircleShape
+                                )
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = msg.text,
+                                color = if (msg.fromUser) TsuWhite else Color.Black
+                            )
+                        }
+                    }
+                }
+            }
+
+
+            val options = (currentNode as? DecisionNode.Split)?.children?.keys?.sorted().orEmpty()
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFF3F3F3))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (options.isNotEmpty()) {
+                    options.forEach { value ->
+                        Button(
+                            onClick = { answer(value) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = TsuBlue,
+                                contentColor = TsuWhite
+                            )
+                        ) {
+                            Text(valueRu(value))
+                        }
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            currentNode = root
+                            result = null
+                            chat = emptyList()
+                            val node = currentNode
+                            if (node is DecisionNode.Split) {
+                                chat = chat + ChatMsg(featureRu(node.feature), fromUser = false)
+                            } else if (node is DecisionNode.Leaf) {
+                                chat = chat + ChatMsg("Рекомендованное место: ${placeRu(node.prediction)}", fromUser = false)
+                            } else {
+                                chat = chat + ChatMsg("Дерево не загружено", fromUser = false)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Начать заново")
+                    }
+                }
+            }
+        }
+    }
+}
+private fun featureRu(feature: String): String = when (feature) {
+    "location" -> "Где вы находитесь?"
+    "budget" -> "Какой у вас бюджет?"
+    "time_available" -> "Сколько у вас времени?"
+    "food_type" -> "Что хотите?"
+    "queue_tolerance" -> "Готовы ли ждать очередь?"
+    "weather" -> "Какая погода?"
+    else -> feature
+}
+
+private fun valueRu(value: String): String = when (value) {
+    "main_building" -> "Главный корпус"
+    "second_building" -> "Второй корпус"
+    "campus_center" -> "Центр кампуса"
+
+
+    "low" -> "Низкий"
+    "medium" -> "Средний"
+    "high" -> "Высокий"
+
+
+    "very_short" -> "Очень мало"
+    "short" -> "Немного"
+
+
+    "coffee" -> "Кофе"
+    "pancakes" -> "Блины"
+    "full_meal" -> "Полноценный обед"
+    "snack" -> "Перекус"
+
+
+    "good" -> "Хорошая"
+    "bad" -> "Плохая"
+
+    else -> value
+}
+
+private fun placeRu(place: String): String = when (place) {
+    "Main_Cafeteria" -> "Главная столовая"
+    "Yarche" -> "Ярче"
+    "Bus_Stop_Coffee" -> "Кофе у остановки"
+    "Starbooks" -> "Старбукс"
+    "Vending_Machine" -> "Вендинговый автомат"
+    "Second_Building_Cafe" -> "Кафе 2-го корпуса"
+    "Siberian_Pancakes" -> "Сибирские блины"
+    else -> place
+}
 @Composable
 fun LandmarkSelectionSheet(
     landmarks: List<Landmark>,

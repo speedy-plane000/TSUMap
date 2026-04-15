@@ -1,0 +1,35 @@
+location,budget,time_available,food_type,queue_tolerance,weather,recommended_place
+sovetskaya,low,very_short,snack,medium,good,Пятерочка
+sovetskaya,low,very_short,coffee,medium,good,Пятерочка
+sovetskaya,low,very_short,snack,low,good,Бристоль
+sovetskaya,low,short,snack,medium,good,Гастроном НАШ
+sovetskaya,low,short,coffee,medium,good,Гастроном НАШ
+sovetskaya,low,short,snack,low,good,Ярче
+sovetskaya,low,short,coffee,low,good,Ярче
+sovetskaya,low,short,full_meal,low,good,Ярче
+moskovskiy_trakt,low,short,snack,high,good,Абрикос
+moskovskiy_trakt,low,short,coffee,high,good,Абрикос
+moskovskiy_trakt,low,short,full_meal,high,good,Абрикос
+moskovskiy_trakt,medium,short,full_meal,low,good,Безумно
+moskovskiy_trakt,low,very_short,snack,low,good,Мария-Ра
+moskovskiy_trakt,low,very_short,coffee,low,good,Мария-Ра
+corpus_2,high,very_short,coffee,medium,bad,XO Bakery
+corpus_2,high,very_short,snack,medium,bad,XO Bakery
+corpus_2,low,short,full_meal,medium,bad,Буфет 2 корпус
+corpus_2,low,short,coffee,medium,bad,Буфет 2 корпус
+corpus_2,low,short,snack,medium,bad,Буфет 2 корпус
+corpus_2,low,very_short,snack,low,bad,Вендинговый Автомат 2 корпус (2этаж)
+corpus_2,low,very_short,coffee,low,bad,Вендинговый Автомат 2 корпус (2этаж)
+lenina,high,medium,full_meal,medium,good,Гербарий
+lenina,high,medium,coffee,medium,good,Гербарий
+lenina,high,medium,full_meal,medium,good,Rostiks
+lenina,high,medium,full_meal,high,good,Сибирские блины (Ленина)
+lenina,high,medium,coffee,high,good,Сибирские блины (Ленина)
+main_building,high,medium,full_meal,high,bad,Сибирские блины (ЦК)
+main_building,medium,medium,full_meal,medium,bad,Минутка
+main_building,low,medium,full_meal,medium,bad,100ловая
+main_building,low,very_short,snack,low,bad,Вендинговый Автомат 1 корпус (1этаж)
+main_building,low,very_short,coffee,low,bad,Вендинговый Автомат 1 корпус (1этаж)
+
+
+
