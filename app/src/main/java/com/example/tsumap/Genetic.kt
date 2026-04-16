@@ -210,7 +210,7 @@ fun evaluateRoute(
     var closedVisits = 0
     val visited = mutableListOf<Int>()
     var penalty = 0.0
-    var priorityBonus = 0.0
+
 
     for (gene in order) {
         if (remaining.isEmpty()) break
@@ -233,15 +233,6 @@ fun evaluateRoute(
             continue
         }
 
-        if (place.hours is VenueHours.Range) {
-            val arrivalTime = expectedArrivalTime.toLocalTime()
-            val closeTime = place.hours.close
-            val minutesUntilClose = java.time.Duration.between(arrivalTime, closeTime).toMinutes()
-            if (minutesUntilClose in 1..60) {
-                priorityBonus += (60 - minutesUntilClose) * 1000.0
-            }
-        }
-
         travelMin += legMin
         t = expectedArrivalTime
 
@@ -258,7 +249,7 @@ fun evaluateRoute(
     }
 
     val totalMinutes = travelMin + serviceMin
-    val cost = (totalMinutes + penalty - priorityBonus).coerceAtLeast(0.0)
+    val cost = (totalMinutes + penalty).coerceAtLeast(0.0)
 
     return RouteEval(cost, totalMinutes, remaining.toSet(), closedVisits, visited)
 }
@@ -482,7 +473,7 @@ fun itemTagsToNeed(selected: Set<String>): Set<ItemTag> {
 
     selected.forEach { key ->
         when (key.trim()) {
-            "Одноразка" -> result += ItemTag.DISPOSABLE
+            "Одноразовая посуда" -> result += ItemTag.DISPOSABLE
             "Рамен/Вок/Рис" -> result += setOf(ItemTag.RAMEN, ItemTag.WOK, ItemTag.RICE)
             "Шаурма" -> result += ItemTag.SHAWARMA
             "Выпечка" -> result += ItemTag.BAKERY
