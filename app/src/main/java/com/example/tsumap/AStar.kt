@@ -12,7 +12,6 @@ data class Node(
 
 data class AStarStep(
     val current: Pair<Int, Int>?,
-    val openSet: List<Pair<Int, Int>>,
     val closedSet: List<Pair<Int, Int>>,
     val path: List<Pair<Int, Int>>
 )
@@ -119,7 +118,6 @@ fun aStarWithSteps(
         steps.add(
             AStarStep(
                 current = current.x to current.y,
-                openSet = openSet.map { it.x to it.y },
                 closedSet = closedSet.toList(),
                 path = emptyList()
             )
@@ -137,7 +135,6 @@ fun aStarWithSteps(
 
             return steps + AStarStep(
                 current = null,
-                openSet = emptyList(),
                 closedSet = closedSet.toList(),
                 path = path.reversed()
             )

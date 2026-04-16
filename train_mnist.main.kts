@@ -182,7 +182,7 @@ class DigitClassifier(
 
     fun saveToFile(file: java.io.File) {
         java.io.DataOutputStream(java.io.BufferedOutputStream(java.io.FileOutputStream(file))).use { out ->
-            out.writeInt(1) // формат версии
+            out.writeInt(1)
             for (w in dense1.getWeights()) out.writeFloat(w)
             for (b in dense1.getBias())    out.writeFloat(b)
             for (w in dense2.getWeights()) out.writeFloat(w)
@@ -291,15 +291,15 @@ val test = loadMnist(testImages, testLabels)
 
 val model = DigitClassifier(inputSize = 50 * 50, hiddenSize = 128, numClasses = 10, seed = 42)
 
-val epochs      = 5
-val batchSize   = 32
+val epochs = 5
+val batchSize = 32
 val learningRate = 0.01f
 val rng = Random(42)
 val n = train.images.size
 val indices = IntArray(n) { it }
 
 val totalBatches = (n + batchSize - 1) / batchSize
-val progressStep = 50  // print progress every N batches
+val progressStep = 50
 
 println("\nStarting training: $epochs epochs, batchSize=$batchSize, lr=$learningRate")
 println("Total batches per epoch: $totalBatches")

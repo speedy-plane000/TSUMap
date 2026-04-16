@@ -37,6 +37,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
@@ -104,7 +106,7 @@ fun MainMapScreen() {
         if (steps.isNotEmpty()) {
             for (i in steps.indices) {
                 currentStep = i
-                kotlinx.coroutines.delay(10)
+                kotlinx.coroutines.delay(15)
             }
 
             path = steps.last().path
@@ -263,6 +265,19 @@ fun MainMapScreen() {
             }
         }
 
+        Button(
+            onClick = { showRoads = !showRoads },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 16.dp, end = 16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = TsuBlue,
+                contentColor = TsuWhite
+            )
+        ) {
+            Text(if (showRoads) "Скрыть дороги" else "Показать дороги")
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -386,7 +401,7 @@ fun MainMapScreen() {
 
                         obstacles.forEach { (x, y) ->
                             drawRect(
-                                color = Color.Red.copy(alpha = 0.7f),
+                                color = Color.Red.copy(alpha = 0.6f),
                                 topLeft = Offset(
                                     startX + x * cellWidth,
                                     startY + y * cellHeight
@@ -539,20 +554,6 @@ fun MainMapScreen() {
                                     )
                                 )
                             }
-
-                            step.openSet.forEach { (x, y) ->
-                                drawRect(
-                                    color = TsuBlue.copy(alpha = 0.2f),
-                                    topLeft = Offset(
-                                        startX + x * cellWidth,
-                                        startY + y * cellHeight
-                                    ),
-                                    size = androidx.compose.ui.geometry.Size(
-                                        cellWidth,
-                                        cellHeight
-                                    )
-                                )
-                            }
                         }
                     }
                 }
@@ -665,6 +666,7 @@ fun MainMapScreen() {
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -700,18 +702,6 @@ fun MainMapScreen() {
                     ) { Text("Назад") }
                 }
             } else if (!clusterMode && !aStarMode) {
-                item {
-                    Button(
-                        onClick = { showRoads = !showRoads },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TsuBlue,
-                            contentColor = TsuWhite
-                        )
-                    ) {
-                        Text("Показать дороги")
-                    }
-                }
-
                 item {
                     Button(
                         onClick = {
@@ -764,6 +754,7 @@ fun MainMapScreen() {
                             clusterMode = false
                             isAcoMode = false
                             geneticMode = false
+                            obstacleMode = false
 
                             path = emptyList()
                             geneticStops = emptyList()
@@ -1553,59 +1544,64 @@ fun LandmarkSelectionSheet(
     onStart: () -> Unit,
     onClose: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.White)
-            .padding(16.dp)
-    ) {
-        Column {
-
-            Text("Выберите достопримечательности")
-
-            landmarks.forEachIndexed { index, lm ->
-
-                Row(
+    Dialog(onDismissRequest = onClose) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = TsuWhite),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("Выберите достопримечательности")
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .heightIn(max = 380.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-
-                    Checkbox(
-                        checked = lm.selected,
-                        onCheckedChange = { onToggle(index) },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = TsuBlue,
-                            uncheckedColor = TsuBlue
-                        )
-                    )
-
-                    Text(
-                        lm.name,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
+                    items(landmarks.size) { index ->
+                        val lm = landmarks[index]
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = lm.selected,
+                                onCheckedChange = { onToggle(index) },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = TsuBlue,
+                                    uncheckedColor = TsuBlue
+                                )
+                            )
+                            Text(lm.name, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
                 }
-            }
-
-            Button(
-                onClick = onStart,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = TsuBlue,
-                    contentColor = TsuWhite
-                )
-            ) {
-                Text("Построить маршрут")
-            }
-
-            Button(
-                onClick = onClose,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = TsuBlue,
-                    contentColor = TsuWhite
-                )
-            ) {
-                Text("Закрыть")
+                Button(
+                    onClick = onStart,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = TsuBlue,
+                        contentColor = TsuWhite
+                    )
+                    ) {
+                        Text("Построить маршрут")
+                    }
+                            Button(
+                            onClick = onClose,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = TsuBlue,
+                        contentColor = TsuWhite
+                    )
+                ) {
+                    Text("Закрыть")
+                }
             }
         }
     }
@@ -1630,53 +1626,64 @@ fun GeneticItemsSheet(
         "Фастфуд"
     )
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.White)
-            .padding(16.dp)
-    ) {
-        Column {
-            Text("Выберите, что купить")
-
-            items.forEach { item ->
-                Row(
+    Dialog(onDismissRequest = onClose) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = TsuWhite),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("Выберите, что купить")
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .heightIn(max = 380.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Checkbox(
-                        checked = item in selected,
-                        onCheckedChange = { onToggle(item) },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = TsuBlue,
-                            uncheckedColor = TsuBlue
-                        )
-                    )
-                    Text(item, modifier = Modifier.padding(start = 8.dp))
+                    items(items.size) { index ->
+                        val item = items[index]
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = item in selected,
+                                onCheckedChange = { onToggle(item) },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = TsuBlue,
+                                    uncheckedColor = TsuBlue
+                                )
+                            )
+                            Text(item, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
                 }
+                Button(
+                    onClick = onStart,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = TsuBlue,
+                        contentColor = TsuWhite
+                    )
+                ) { Text("Построить маршрут") }
+                Button(
+                    onClick = onClose,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = TsuBlue,
+                        contentColor = TsuWhite
+                    )
+                ) { Text("Закрыть") }
             }
-
-            Button(
-                onClick = onStart,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = TsuBlue,
-                    contentColor = TsuWhite
-                )
-            ) { Text("Построить маршрут") }
-
-            Button(
-                onClick = onClose,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = TsuBlue,
-                    contentColor = TsuWhite
-                )
-            ) { Text("Закрыть") }
         }
     }
 }
-
 @Composable
 fun DecisionTreeChatScreen(
     root: DecisionNode?,
@@ -1742,6 +1749,7 @@ fun DecisionTreeChatScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(TsuBlue)
+                    .statusBarsPadding()
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -1794,6 +1802,7 @@ fun DecisionTreeChatScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xFFF3F3F3))
+                    .navigationBarsPadding()
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
