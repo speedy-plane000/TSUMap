@@ -88,6 +88,8 @@ fun MainMapScreen() {
     LaunchedEffect(Unit) {
         requestLocationPermission(context)
     }
+
+
     var decisionTreeMode by remember { mutableStateOf(false) }
     var decisionTreeRoot by remember { mutableStateOf<DecisionNode?>(null) }
     var decisionTreeCurrentNode by remember { mutableStateOf<DecisionNode?>(null) }
@@ -98,17 +100,6 @@ fun MainMapScreen() {
     var currentStep by remember { mutableStateOf(0) }
     var path by remember { mutableStateOf<List<Pair<Int, Int>>>(emptyList()) }
 
-    LaunchedEffect(Unit) {
-        val rows = loadTrainingRows(context, "data.csv")
-        if (rows.isNotEmpty()) {
-            val features = rows.first().features.keys.toList()
-            val root = trainDecisionTree(rows, features, forceRootFeature = "food_type")
-            decisionTreeRoot = root
-            decisionTreeCurrentNode = root
-        }
-    }
-
-
     LaunchedEffect(steps) {
         if (steps.isNotEmpty()) {
             for (i in steps.indices) {
@@ -117,6 +108,16 @@ fun MainMapScreen() {
             }
 
             path = steps.last().path
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val rows = loadTrainingRows(context, "data.csv")
+        if (rows.isNotEmpty()) {
+            val features = rows.first().features.keys.toList()
+            val root = trainDecisionTree(rows, features, forceRootFeature = "food_type")
+            decisionTreeRoot = root
+            decisionTreeCurrentNode = root
         }
     }
     val grid = remember {
@@ -785,6 +786,50 @@ fun MainMapScreen() {
                         Text("Генетический")
                     }
                 }
+                if (geneticUiMode) {
+                    item {
+                        Button(
+                            onClick = { showGeneticItemsSheet = true },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = TsuBlue,
+                                contentColor = TsuWhite
+                            )
+                        ) { Text("Поменять товары") }
+                    }
+
+                    item {
+                        Button(
+                            onClick = {
+                                geneticUiMode = false
+                                geneticMode = false
+                                selectionMode = null
+                                geneticHintText = null
+                                showGeneticItemsSheet = false
+
+                                path = emptyList()
+                                geneticStops = emptyList()
+                                geneticStartPoint = null
+                                selectedNeeds = emptySet()
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = TsuBlue,
+                                contentColor = TsuWhite
+                            )
+                        ) { Text("Назад") }
+                    }
+                }
+
+                item {
+                    Button(
+                        onClick = { showSheet = true },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TsuBlue,
+                            contentColor = TsuWhite
+                        )
+                    ) {
+                        Text("Муравьиный алгоритм")
+                    }
+                }
                 item {
                     Button(
                         onClick = {
@@ -807,6 +852,10 @@ fun MainMapScreen() {
 
 
                             decisionTreeMode = true
+                            decisionTreeAnswers = emptyMap()
+                            decisionTreePath = emptyList()
+                            decisionTreeResult = null
+                            decisionTreeCurrentNode = decisionTreeRoot
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = TsuBlue,
@@ -814,17 +863,6 @@ fun MainMapScreen() {
                         )
                     ) {
                         Text("Дерево решений")
-                    }
-                }
-                item {
-                    Button(
-                        onClick = { showSheet = true },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TsuBlue,
-                            contentColor = TsuWhite
-                        )
-                    ) {
-                        Text("Муравьиный алгоритм")
                     }
                 }
                 item {
@@ -1486,6 +1524,138 @@ fun GreetingPreview() {
     }
 }
 
+
+@Composable
+fun LandmarkSelectionSheet(
+    landmarks: List<Landmark>,
+    onToggle: (Int) -> Unit,
+    onStart: () -> Unit,
+    onClose: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .padding(16.dp)
+    ) {
+        Column {
+
+            Text("Выберите достопримечательности")
+
+            landmarks.forEachIndexed { index, lm ->
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+
+                    Checkbox(
+                        checked = lm.selected,
+                        onCheckedChange = { onToggle(index) },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = TsuBlue,
+                            uncheckedColor = TsuBlue
+                        )
+                    )
+
+                    Text(
+                        lm.name,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+            }
+
+            Button(
+                onClick = onStart,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TsuBlue,
+                    contentColor = TsuWhite
+                )
+            ) {
+                Text("Построить маршрут")
+            }
+
+            Button(
+                onClick = onClose,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TsuBlue,
+                    contentColor = TsuWhite
+                )
+            ) {
+                Text("Закрыть")
+            }
+        }
+    }
+}
+@Composable
+fun GeneticItemsSheet(
+    selected: Set<String>,
+    onToggle: (String) -> Unit,
+    onStart: () -> Unit,
+    onClose: () -> Unit
+) {
+    val items = listOf(
+        "Одноразка",
+        "Рамен/Вок/Рис",
+        "Шаурма",
+        "Выпечка",
+        "Напитки",
+        "Снеки",
+        "Кофе",
+        "Комплексный обед",
+        "Блины",
+        "Фастфуд"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .padding(16.dp)
+    ) {
+        Column {
+            Text("Выберите, что купить")
+
+            items.forEach { item ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = item in selected,
+                        onCheckedChange = { onToggle(item) },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = TsuBlue,
+                            uncheckedColor = TsuBlue
+                        )
+                    )
+                    Text(item, modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+
+            Button(
+                onClick = onStart,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TsuBlue,
+                    contentColor = TsuWhite
+                )
+            ) { Text("Построить маршрут") }
+
+            Button(
+                onClick = onClose,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TsuBlue,
+                    contentColor = TsuWhite
+                )
+            ) { Text("Закрыть") }
+        }
+    }
+}
+
 @Composable
 fun DecisionTreeChatScreen(
     root: DecisionNode?,
@@ -1629,7 +1799,7 @@ fun DecisionTreeChatScreen(
                             if (node is DecisionNode.Split) {
                                 chat = chat + ChatMsg(featureRu(node.feature), fromUser = false)
                             } else if (node is DecisionNode.Leaf) {
-                                chat = chat + ChatMsg("Рекомендованное место: ${placeRu(node.prediction)}", fromUser = false)
+                                chat = chat + ChatMsg("Рекомендованное место: ${node.prediction}", fromUser = false)
                             } else {
                                 chat = chat + ChatMsg("Дерево не загружено", fromUser = false)
                             }
@@ -1647,20 +1817,25 @@ fun DecisionTreeChatScreen(
         }
     }
 }
+
+
 private fun featureRu(feature: String): String = when (feature) {
     "location" -> "Где вы находитесь?"
     "budget" -> "Какой у вас бюджет?"
     "time_available" -> "Сколько у вас времени?"
     "food_type" -> "Что хотите?"
-    "queue_tolerance" -> "Готовы ли ждать очередь?"
+    "queue_tolerance" -> "Готовы ли стоять в очереди?"
     "weather" -> "Какая погода?"
     else -> feature
 }
 
 private fun valueRu(value: String): String = when (value) {
+
+    "sovetskaya" -> "Советская"
+    "moskovskiy_trakt" -> "Московский тракт"
+    "corpus_2" -> "2-й корпус"
+    "lenina" -> "Ленина"
     "main_building" -> "Главный корпус"
-    "second_building" -> "Второй корпус"
-    "campus_center" -> "Центр кампуса"
 
 
     "low" -> "Низкий"
@@ -1671,11 +1846,9 @@ private fun valueRu(value: String): String = when (value) {
     "very_short" -> "Очень мало"
     "short" -> "Немного"
 
-
-    "coffee" -> "Кофе"
-    "pancakes" -> "Блины"
-    "full_meal" -> "Полноценный обед"
     "snack" -> "Перекус"
+    "coffee" -> "Кофе"
+    "full_meal" -> "Полноценный обед"
 
 
     "good" -> "Хорошая"
@@ -1685,142 +1858,22 @@ private fun valueRu(value: String): String = when (value) {
 }
 
 private fun placeRu(place: String): String = when (place) {
-    "Main_Cafeteria" -> "Главная столовая"
-    "Yarche" -> "Ярче"
-    "Bus_Stop_Coffee" -> "Кофе у остановки"
-    "Starbooks" -> "Старбукс"
-    "Vending_Machine" -> "Вендинговый автомат"
-    "Second_Building_Cafe" -> "Кафе 2-го корпуса"
-    "Siberian_Pancakes" -> "Сибирские блины"
+    "Пятерочка" -> "Пятерочка"
+    "Бристоль" -> "Бристоль"
+    "Гастроном НАШ" -> "Гастроном НАШ"
+    "Ярче" -> "Ярче"
+    "Абрикос" -> "Абрикос"
+    "Безумно" -> "Безумно"
+    "Мария-Ра" -> "Мария-Ра"
+    "XO Bakery" -> "XO Bakery"
+    "Буфет 2 корпус" -> "Буфет 2 корпус"
+    "Вендинговый Автомат 2 корпус (2этаж)" -> "Вендинговый автомат 2 корпус (2 этаж)"
+    "Гербарий" -> "Гербарий"
+    "Rostiks" -> "Rostiks"
+    "Сибирские блины (Ленина)" -> "Сибирские блины (Ленина)"
+    "Сибирские блины (ЦК)" -> "Сибирские блины (ЦК)"
+    "Минутка" -> "Минутка"
+    "100ловая" -> "100ловая"
+    "Вендинговый Автомат 1 корпус (1этаж)" -> "Вендинговый автомат 1 корпус (1 этаж)"
     else -> place
-}
-@Composable
-fun LandmarkSelectionSheet(
-    landmarks: List<Landmark>,
-    onToggle: (Int) -> Unit,
-    onStart: () -> Unit,
-    onClose: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.White)
-            .padding(16.dp)
-    ) {
-        Column {
-
-            Text("Выберите достопримечательности")
-
-            landmarks.forEachIndexed { index, lm ->
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-
-                    Checkbox(
-                        checked = lm.selected,
-                        onCheckedChange = { onToggle(index) },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = TsuBlue,
-                            uncheckedColor = TsuBlue
-                        )
-                    )
-
-                    Text(
-                        lm.name,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
-                }
-            }
-
-            Button(
-                onClick = onStart,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = TsuBlue,
-                    contentColor = TsuWhite
-                )
-            ) {
-                Text("Построить маршрут")
-            }
-
-            Button(
-                onClick = onClose,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = TsuBlue,
-                    contentColor = TsuWhite
-                )
-            ) {
-                Text("Закрыть")
-            }
-        }
-    }
-}
-@Composable
-fun GeneticItemsSheet(
-    selected: Set<String>,
-    onToggle: (String) -> Unit,
-    onStart: () -> Unit,
-    onClose: () -> Unit
-) {
-    val items = listOf(
-        "Одноразка",
-        "Рамен/Вок/Рис",
-        "Шаурма",
-        "Выпечка",
-        "Напитки",
-        "Снеки",
-        "Кофе",
-        "Комплексный обед",
-        "Блины",
-        "Фастфуд"
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.White)
-            .padding(16.dp)
-    ) {
-        Column {
-            Text("Выберите, что купить")
-
-            items.forEach { item ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(
-                        checked = item in selected,
-                        onCheckedChange = { onToggle(item) },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = TsuBlue,
-                            uncheckedColor = TsuBlue
-                        )
-                    )
-                    Text(item, modifier = Modifier.padding(start = 8.dp))
-                }
-            }
-
-            Button(
-                onClick = onStart,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = TsuBlue,
-                    contentColor = TsuWhite
-                )
-            ) { Text("Построить маршрут") }
-
-            Button(
-                onClick = onClose,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = TsuBlue,
-                    contentColor = TsuWhite
-                )
-            ) { Text("Закрыть") }
-        }
-    }
 }

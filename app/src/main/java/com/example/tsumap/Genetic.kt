@@ -22,8 +22,7 @@ enum class ItemTag{
 
 sealed class VenueHours {
     data object Open24h : VenueHours()
-    data object UntilEndOfDay : VenueHours()
-    data class Until(val close: LocalTime) : VenueHours()
+    data class Range(val open: LocalTime, val close: LocalTime) : VenueHours()
 }
 
 data class FoodPlace(
@@ -64,25 +63,25 @@ fun foodVenuesCatalog(): List<FoodPlace> = listOf(
         name = "Мария-Ра",
         point = Point(15, 4),
         offers = setOf(ItemTag.DISPOSABLE),
-        hours = VenueHours.Until(LocalTime.of(22, 0))
+        hours = VenueHours.Range(LocalTime.of(7, 0), LocalTime.of(23, 0))
     ),
     FoodPlace(
         name = "Цзисяни",
         point = Point(101, 6),
         offers = setOf(ItemTag.RAMEN, ItemTag.WOK, ItemTag.RICE),
-        hours = VenueHours.Until(LocalTime.of(19, 0))
+        hours = VenueHours.Range(LocalTime.of(10, 0), LocalTime.of(19, 0))
     ),
     FoodPlace(
         name = "Безумно",
         point = Point(149, 9),
         offers = setOf(ItemTag.SHAWARMA),
-        hours = VenueHours.Until(LocalTime.of(23, 0))
+        hours = VenueHours.Range(LocalTime.of(7, 0), LocalTime.of(23, 0))
     ),
     FoodPlace(
         name = "Абрикос",
         point = Point(149, 15),
         offers = setOf(ItemTag.DISPOSABLE, ItemTag.BAKERY, ItemTag.DRINKS, ItemTag.SNACKS),
-        hours = VenueHours.Until(LocalTime.of(23, 0))
+        hours = VenueHours.Range(LocalTime.of(7, 0), LocalTime.of(23, 0))
     ),
     FoodPlace(
         name = "Пилад",
@@ -94,73 +93,73 @@ fun foodVenuesCatalog(): List<FoodPlace> = listOf(
         name = "XO Bakery",
         point = Point(92, 54),
         offers = setOf(ItemTag.COFFEE, ItemTag.BAKERY),
-        hours = VenueHours.Until(LocalTime.of(19, 0))
+        hours = VenueHours.Range(LocalTime.of(10, 0), LocalTime.of(19, 0))
     ),
     FoodPlace(
         name = "Сыр-Бор",
         point = Point(135, 60),
         offers = setOf(ItemTag.COMBO_LUNCH),
-        hours = VenueHours.Until(LocalTime.of(15, 0))
+        hours = VenueHours.Range(LocalTime.of(10, 0), LocalTime.of(15, 0))
     ),
     FoodPlace(
         name = "Сибирские блины (ЦК)",
         point = Point(104, 64),
         offers = setOf(ItemTag.PANCAKES),
-        hours = VenueHours.Until(LocalTime.of(20, 0))
+        hours = VenueHours.Range(LocalTime.of(9, 0), LocalTime.of(20, 0))
     ),
     FoodPlace(
         name = "Укромное местечко",
         point = Point(167, 89),
         offers = setOf(ItemTag.COMBO_LUNCH),
-        hours = VenueHours.Until(LocalTime.of(17, 0))
+        hours = VenueHours.Range(LocalTime.of(10, 0), LocalTime.of(17, 0))
     ),
     FoodPlace(
         name = "Научка",
         point = Point(76, 97),
         offers = setOf(ItemTag.COFFEE),
-        hours = VenueHours.Until(LocalTime.of(20, 0))
+        hours = VenueHours.Range(LocalTime.of(8, 0), LocalTime.of(20, 0))
     ),
     FoodPlace(
         name = "Сибирские блины (Ленина)",
         point = Point(172, 116),
         offers = setOf(ItemTag.PANCAKES),
-        hours = VenueHours.Until(LocalTime.of(20, 0))
+        hours = VenueHours.Range(LocalTime.of(9, 0), LocalTime.of(20, 0))
     ),
     FoodPlace(
         name = "Rostiks",
         point = Point(102, 120),
         offers = setOf(ItemTag.FAST_FOOD),
-        hours = VenueHours.Until(LocalTime.of(23, 0))
+        hours = VenueHours.Range(LocalTime.of(8, 0), LocalTime.of(23, 0))
     ),
     FoodPlace(
         name = "Гербарий",
         point = Point(122, 122),
         offers = setOf(ItemTag.COMBO_LUNCH),
-        hours = VenueHours.Until(LocalTime.of(23, 0))
+        hours = VenueHours.Range(LocalTime.of(8, 0), LocalTime.of(23, 0))
     ),
     FoodPlace(
         name = "Пятерочка",
         point = Point(4, 124),
         offers = setOf(ItemTag.DISPOSABLE, ItemTag.BAKERY, ItemTag.DRINKS, ItemTag.SNACKS),
-        hours = VenueHours.Until(LocalTime.of(23, 0))
+        hours = VenueHours.Range(LocalTime.of(7, 0), LocalTime.of(23, 0))
     ),
     FoodPlace(
         name = "Ближе",
         point = Point(150, 131),
         offers = setOf(ItemTag.COMBO_LUNCH),
-        hours = VenueHours.UntilEndOfDay
+        hours = VenueHours.Range(LocalTime.of(7, 0), LocalTime.of(23, 0))
     ),
     FoodPlace(
         name = "Бристоль",
         point = Point(92, 137),
         offers = setOf(ItemTag.DISPOSABLE, ItemTag.DRINKS, ItemTag.SNACKS),
-        hours = VenueHours.Until(LocalTime.of(22, 0))
+        hours = VenueHours.Range(LocalTime.of(7, 0), LocalTime.of(23, 0))
     ),
     FoodPlace(
         name = "Ярче",
         point = Point(148, 144),
         offers = setOf(ItemTag.DISPOSABLE, ItemTag.BAKERY, ItemTag.DRINKS, ItemTag.SNACKS),
-        hours = VenueHours.Until(LocalTime.of(22, 0))
+        hours = VenueHours.Range(LocalTime.of(7, 0), LocalTime.of(23, 0))
     )
 )
 
@@ -177,19 +176,20 @@ fun pathTravelMinutes(pathLengthUnits: Double, config: RouteConfig): Double {
     return hours * 60.0
 }
 
-fun canVisitAt(hours: VenueHours, time: LocalDateTime): Boolean{
-    return when (hours){
+fun canVisitAt(hours: VenueHours, time: LocalDateTime): Boolean {
+    val cur = time.toLocalTime()
+    return when (hours) {
         is VenueHours.Open24h -> true
-        is VenueHours.UntilEndOfDay -> {
-            val day = time.toLocalDate()
-            val endExclusive = day.plusDays(1).atStartOfDay()
-            time.isBefore(endExclusive)
+        is VenueHours.Range -> {
+
+            if (hours.open < hours.close) {
+
+                cur >= hours.open && cur < hours.close
+            } else {
+                cur >= hours.open || cur < hours.close
+            }
         }
-        is VenueHours.Until -> {
-            val day = time.toLocalDate()
-            val deadline = LocalDateTime.of(day, hours.close)
-            !time.isAfter(deadline)
-        }
+        else -> true
     }
 }
 
@@ -210,26 +210,45 @@ fun evaluateRoute(
     var closedVisits = 0
     val visited = mutableListOf<Int>()
     var penalty = 0.0
+    var priorityBonus = 0.0
 
     for (gene in order) {
         if (remaining.isEmpty()) break
 
         val place = venues[gene]
-        val legUnits = gridEuclideanDistance(curPos, place.point)
-        val legMin = pathTravelMinutes(legUnits, config)
 
-        travelMin += legMin
-        t = t.plusMinutes(legMin.roundToLong())
-
-        if (!canVisitAt(place.hours, t)) {
-            closedVisits++
-            penalty += config.penaltyClosed
-        } else {
-            serviceMin += config.serviceMinute
-            t = t.plusMinutes(config.serviceMinute.roundToLong())
-            remaining.removeAll(place.offers.intersect(remaining).toSet())
+        val usefulOffers = place.offers.intersect(remaining).toSet()
+        if (usefulOffers.isEmpty()) {
+            continue
         }
 
+        val legUnits = gridEuclideanDistance(curPos, place.point)
+        val legMin = pathTravelMinutes(legUnits, config)
+        val expectedArrivalTime = t.plusMinutes(legMin.roundToLong())
+
+
+        if (!canVisitAt(place.hours, expectedArrivalTime)) {
+            closedVisits++
+            penalty += config.penaltyClosed
+            continue
+        }
+
+        if (place.hours is VenueHours.Range) {
+            val arrivalTime = expectedArrivalTime.toLocalTime()
+            val closeTime = place.hours.close
+            val minutesUntilClose = java.time.Duration.between(arrivalTime, closeTime).toMinutes()
+            if (minutesUntilClose in 1..60) {
+                priorityBonus += (60 - minutesUntilClose) * 1000.0
+            }
+        }
+
+        travelMin += legMin
+        t = expectedArrivalTime
+
+        serviceMin += config.serviceMinute
+        t = t.plusMinutes(config.serviceMinute.roundToLong())
+
+        remaining.removeAll(usefulOffers)
         curPos = place.point
         visited.add(gene)
     }
@@ -239,7 +258,7 @@ fun evaluateRoute(
     }
 
     val totalMinutes = travelMin + serviceMin
-    val cost = totalMinutes + penalty
+    val cost = (totalMinutes + penalty - priorityBonus).coerceAtLeast(0.0)
 
     return RouteEval(cost, totalMinutes, remaining.toSet(), closedVisits, visited)
 }
