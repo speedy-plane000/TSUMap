@@ -1341,11 +1341,22 @@ fun RatingDrawingDialog(
     placeName: String,
     onClose: () -> Unit
 ) {
+    val context = LocalContext.current
     val gridSize = 50
     val pixels = remember { Array(gridSize) { BooleanArray(gridSize) } }
     var redrawTrigger by remember { mutableStateOf(0) }
     var predictedResult by remember { mutableStateOf<String?>(null) }
     var lastDragCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    val (classifier, modelReady) = remember {
+        val model = DigitClassifier(inputSize = 50 * 50, hiddenSize = 128, numClasses = 10, seed = 42)
+        val loaded = try {
+            model.loadFromAssets(context, "digit_model.bin")
+            true
+        } catch (_: Exception) {
+            false
+        }
+        model to loaded
+    }
 
     fun paintBrush(cellX: Int, cellY: Int) {
         for (dy in -1..1) {
@@ -1473,7 +1484,17 @@ fun RatingDrawingDialog(
                 ) {
                     Button(
                         onClick = {
-                            predictedResult = "Результат: нейросеть будет подключена позже"
+                            if (!modelReady) {
+                                predictedResult = "Модель не обучена. Запустите train_mnist.main.kts на ПК."
+                            } else {
+                                val input = FloatArray(gridSize * gridSize) { idx ->
+                                    val y = idx / gridSize
+                                    val x = idx % gridSize
+                                    if (pixels[y][x]) 1f else 0f
+                                }
+                                val digit = classifier.predict(input)
+                                predictedResult = "Оценка: $digit"
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = TsuBlue,

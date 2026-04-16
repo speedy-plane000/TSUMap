@@ -1,13 +1,4 @@
 #!/usr/bin/env kotlin
-/**
- * Standalone Kotlin script for training the digit classifier on a PC.
- *
- * Run from the project root directory:
- *   kotlin train_mnist.main.kts
- *
- * Or compile to a JAR and run:
- *   kotlinc -script train_mnist.main.kts
- */
 
 import java.io.BufferedInputStream
 import java.io.DataInputStream
@@ -15,8 +6,6 @@ import java.io.File
 import java.io.FileInputStream
 import kotlin.math.sqrt
 import kotlin.random.Random
-
-// ===== Math helpers =====
 
 object MathOps {
     fun argMax(values: FloatArray): Int {
@@ -40,8 +29,6 @@ object MathOps {
         }
     }
 }
-
-// ===== Layers =====
 
 class DenseLayer(
     private val inputSize: Int,
@@ -164,8 +151,6 @@ object SoftmaxCrossEntropy {
     }
 }
 
-// ===== Model =====
-
 class DigitClassifier(
     inputSize: Int = 50 * 50,
     hiddenSize: Int = 128,
@@ -216,8 +201,6 @@ class DigitClassifier(
         }
     }
 }
-
-// ===== MNIST loader (reads directly from the filesystem, no Android Context needed) =====
 
 data class MnistDataset(val images: Array<FloatArray>, val labels: IntArray)
 
@@ -278,8 +261,6 @@ fun evaluateAccuracy(model: DigitClassifier, images: Array<FloatArray>, labels: 
     return correct.toFloat() / preds.size
 }
 
-// ===== Entry point =====
-
 val projectRoot = File(System.getProperty("user.dir") ?: ".")
 val mnistDir = File(projectRoot, "app/src/main/assets/mnist")
 
@@ -302,11 +283,11 @@ for (f in listOf(trainImages, trainLabels, testImages, testLabels)) {
     }
 }
 
-println("Loading training data (10_000 samples)...")
-val train = loadMnist(trainImages, trainLabels, limit = 10_000)
+println("Loading training data")
+val train = loadMnist(trainImages, trainLabels)
 
-println("Loading test data (2_000 samples)...")
-val test = loadMnist(testImages, testLabels, limit = 2_000)
+println("Loading test data")
+val test = loadMnist(testImages, testLabels)
 
 val model = DigitClassifier(inputSize = 50 * 50, hiddenSize = 128, numClasses = 10, seed = 42)
 
@@ -363,6 +344,13 @@ val totalSec = (System.currentTimeMillis() - trainingStartMs) / 1000.0
 println("=".repeat(60))
 println("Training complete! Total time: %.1fs".format(totalSec))
 
-val modelFile = File(projectRoot, "app/src/main/assets/digit_model.bin")
+val desktopDir = File(System.getProperty("user.home"), "Desktop")
+val modelFile = File(if (desktopDir.isDirectory) desktopDir else projectRoot, "digit_model.bin")
 model.saveToFile(modelFile)
 println("Model saved to: ${modelFile.absolutePath}")
+println()
+println("Next step: copy the file to your project's assets folder:")
+println("  ${File(projectRoot, "app/src/main/assets/digit_model.bin").absolutePath}")
+println()
+println("PowerShell command:")
+println("  Copy-Item -Path \"${modelFile.absolutePath}\" -Destination \"${File(projectRoot, "app/src/main/assets/digit_model.bin").absolutePath}\" -Force")
