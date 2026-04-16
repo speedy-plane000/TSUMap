@@ -104,7 +104,7 @@ fun MainMapScreen() {
         if (steps.isNotEmpty()) {
             for (i in steps.indices) {
                 currentStep = i
-                kotlinx.coroutines.delay(50)
+                kotlinx.coroutines.delay(10)
             }
 
             path = steps.last().path
@@ -210,7 +210,7 @@ fun MainMapScreen() {
 
 
     val minScale = 1f
-    val maxScale = 4f
+    val maxScale = 8f
 
     BoxWithConstraints(
         modifier = Modifier
@@ -386,7 +386,7 @@ fun MainMapScreen() {
 
                         obstacles.forEach { (x, y) ->
                             drawRect(
-                                color = Color.Red.copy(alpha = 0.4f),
+                                color = Color.Red.copy(alpha = 0.7f),
                                 topLeft = Offset(
                                     startX + x * cellWidth,
                                     startY + y * cellHeight
