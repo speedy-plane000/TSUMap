@@ -165,3 +165,13 @@ fun aStarWithSteps(
 
     return steps
 }
+
+
+fun aStarDistance(
+    grid: Array<IntArray>,
+    start: Pair<Int, Int>,
+    end: Pair<Int, Int>
+): Int {
+    val path = aStar(grid, start, end)
+    return if (path.isEmpty()) -1 else path.size - 1
+}
