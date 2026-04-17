@@ -39,10 +39,21 @@ class DenseLayer(
     private val bias = FloatArray(outputSize)
     private lateinit var lastInput: Array<FloatArray>
 
+    private val velW = FloatArray(inputSize * outputSize)
+    private val velB = FloatArray(outputSize)
+
+    companion object {
+        private const val MOMENTUM = 0.9f
+        private const val WEIGHT_DECAY = 1e-4f
+    }
+
     init {
-        val limit = sqrt(6f / (inputSize + outputSize))
+        val std = sqrt(2f / inputSize)
         for (i in weights.indices) {
-            weights[i] = random.nextFloat() * 2f * limit - limit
+            val u1 = random.nextFloat().coerceAtLeast(1e-7f)
+            val u2 = random.nextFloat()
+            val z = sqrt(-2f * kotlin.math.ln(u1)) * kotlin.math.cos(2f * Math.PI.toFloat() * u2)
+            weights[i] = z * std
         }
     }
 
@@ -82,15 +93,22 @@ class DenseLayer(
             }
         }
         val scale = 1f / batch
-        for (k in weights.indices) weights[k] -= learningRate * gradW[k] * scale
-        for (j in 0 until outputSize) bias[j] -= learningRate * gradB[j] * scale
+        for (k in weights.indices) {
+            val g = gradW[k] * scale + WEIGHT_DECAY * weights[k]
+            velW[k] = MOMENTUM * velW[k] - learningRate * g
+            weights[k] += velW[k]
+        }
+        for (j in 0 until outputSize) {
+            val g = gradB[j] * scale
+            velB[j] = MOMENTUM * velB[j] - learningRate * g
+            bias[j] += velB[j]
+        }
+
         return gradInput
     }
 
     fun getWeights(): FloatArray = weights.copyOf()
     fun getBias(): FloatArray = bias.copyOf()
-    fun setWeights(w: FloatArray) { w.copyInto(weights) }
-    fun setBias(b: FloatArray) { b.copyInto(bias) }
 }
 
 class ReLULayer {
@@ -153,14 +171,15 @@ object SoftmaxCrossEntropy {
 
 class DigitClassifier(
     inputSize: Int = 50 * 50,
-    hiddenSize: Int = 128,
+    hiddenSize: Int = 256,
     numClasses: Int = 10,
     seed: Int = 42
 ) {
     private val random = Random(seed)
     private val dense1 = DenseLayer(inputSize = inputSize, outputSize = hiddenSize, random = random)
     private val relu = ReLULayer()
-    private val dense2 = DenseLayer(inputSize = hiddenSize, outputSize = numClasses, random = random)
+    private val dense2 =
+        DenseLayer(inputSize = hiddenSize, outputSize = numClasses, random = random)
 
     fun trainOnBatch(batchX: Array<FloatArray>, batchY: IntArray, learningRate: Float): Float {
         val z1 = dense1.forward(batchX)
@@ -181,24 +200,14 @@ class DigitClassifier(
     }
 
     fun saveToFile(file: java.io.File) {
-        java.io.DataOutputStream(java.io.BufferedOutputStream(java.io.FileOutputStream(file))).use { out ->
-            out.writeInt(1)
-            for (w in dense1.getWeights()) out.writeFloat(w)
-            for (b in dense1.getBias())    out.writeFloat(b)
-            for (w in dense2.getWeights()) out.writeFloat(w)
-            for (b in dense2.getBias())    out.writeFloat(b)
-        }
-    }
-
-    fun loadFromFile(file: java.io.File) {
-        java.io.DataInputStream(java.io.BufferedInputStream(java.io.FileInputStream(file))).use { inp ->
-            val version = inp.readInt()
-            require(version == 1) { "Unknown model version: $version" }
-            dense1.setWeights(FloatArray(dense1.getWeights().size) { inp.readFloat() })
-            dense1.setBias(FloatArray(dense1.getBias().size) { inp.readFloat() })
-            dense2.setWeights(FloatArray(dense2.getWeights().size) { inp.readFloat() })
-            dense2.setBias(FloatArray(dense2.getBias().size) { inp.readFloat() })
-        }
+        java.io.DataOutputStream(java.io.BufferedOutputStream(java.io.FileOutputStream(file)))
+            .use { out ->
+                out.writeInt(1)
+                for (w in dense1.getWeights()) out.writeFloat(w)
+                for (b in dense1.getBias()) out.writeFloat(b)
+                for (w in dense2.getWeights()) out.writeFloat(w)
+                for (b in dense2.getBias()) out.writeFloat(b)
+            }
     }
 }
 
@@ -232,7 +241,8 @@ fun loadMnist(imagesFile: File, labelsFile: File, limit: Int? = null): MnistData
             for (i in 0 until count) {
                 for (p in srcImage.indices) srcImage[p] = images.readUnsignedByte()
                 labelsArr[i] = labels.readUnsignedByte()
-                imagesArr[i] = resizeAndNormalize(srcImage, srcRows, srcCols, outputRows, outputCols)
+                imagesArr[i] =
+                    resizeAndNormalize(srcImage, srcRows, srcCols, outputRows, outputCols)
             }
 
             MnistDataset(imagesArr, labelsArr)
@@ -245,10 +255,18 @@ fun resizeAndNormalize(
 ): FloatArray {
     val out = FloatArray(outRows * outCols)
     for (y in 0 until outRows) {
-        val srcY = ((y.toFloat() / outRows) * srcRows).toInt().coerceIn(0, srcRows - 1)
+        val srcYf = (y + 0.5f) * srcRows / outRows - 0.5f
+        val y0 = srcYf.toInt().coerceIn(0, srcRows - 1)
+        val y1 = (y0 + 1).coerceIn(0, srcRows - 1)
+        val wy = srcYf - y0
         for (x in 0 until outCols) {
-            val srcX = ((x.toFloat() / outCols) * srcCols).toInt().coerceIn(0, srcCols - 1)
-            out[y * outCols + x] = src[srcY * srcCols + srcX] / 255f
+            val srcXf = (x + 0.5f) * srcCols / outCols - 0.5f
+            val x0 = srcXf.toInt().coerceIn(0, srcCols - 1)
+            val x1 = (x0 + 1).coerceIn(0, srcCols - 1)
+            val wx = srcXf - x0
+            val top = src[y0 * srcCols + x0] * (1f - wx) + src[y0 * srcCols + x1] * wx
+            val bottom = src[y1 * srcCols + x0] * (1f - wx) + src[y1 * srcCols + x1] * wx
+            out[y * outCols + x] = (top * (1f - wy) + bottom * wy) / 255f
         }
     }
     return out
@@ -273,8 +291,8 @@ if (!mnistDir.exists()) {
 
 val trainImages = File(mnistDir, "train-images-idx3-ubyte")
 val trainLabels = File(mnistDir, "train-labels-idx1-ubyte")
-val testImages  = File(mnistDir, "t10k-images-idx3-ubyte")
-val testLabels  = File(mnistDir, "t10k-labels-idx1-ubyte")
+val testImages = File(mnistDir, "t10k-images-idx3-ubyte")
+val testLabels = File(mnistDir, "t10k-labels-idx1-ubyte")
 
 for (f in listOf(trainImages, trainLabels, testImages, testLabels)) {
     if (!f.exists()) {
@@ -289,9 +307,9 @@ val train = loadMnist(trainImages, trainLabels)
 println("Loading test data")
 val test = loadMnist(testImages, testLabels)
 
-val model = DigitClassifier(inputSize = 50 * 50, hiddenSize = 128, numClasses = 10, seed = 42)
+val model = DigitClassifier(inputSize = 50 * 50, hiddenSize = 256, numClasses = 10, seed = 42)
 
-val epochs = 2
+val epochs = 20
 val batchSize = 32
 val learningRate = 0.01f
 val rng = Random(42)
@@ -326,14 +344,18 @@ for (epoch in 1..epochs) {
         if (steps % progressStep == 0 || steps == totalBatches) {
             val pct = steps * 100 / totalBatches
             val avgLoss = lossSum / steps
-            print("\rEpoch $epoch/$epochs  [batch $steps/$totalBatches  $pct%%]  loss=%.4f".format(avgLoss))
+            print(
+                "\rEpoch $epoch/$epochs  [batch $steps/$totalBatches  $pct%%]  loss=%.4f".format(
+                    avgLoss
+                )
+            )
             System.out.flush()
         }
     }
 
     val epochSec = (System.currentTimeMillis() - epochStartMs) / 1000.0
     val trainAcc = evaluateAccuracy(model, train.images, train.labels)
-    val testAcc  = evaluateAccuracy(model, test.images,  test.labels)
+    val testAcc = evaluateAccuracy(model, test.images, test.labels)
     println(
         "\rEpoch %d/%d  loss=%.4f  train_acc=%.4f  test_acc=%.4f  (%.1fs)"
             .format(epoch, epochs, lossSum / steps, trainAcc, testAcc, epochSec)
@@ -348,9 +370,3 @@ val desktopDir = File(System.getProperty("user.home"), "Desktop")
 val modelFile = File(if (desktopDir.isDirectory) desktopDir else projectRoot, "digit_model.bin")
 model.saveToFile(modelFile)
 println("Model saved to: ${modelFile.absolutePath}")
-println()
-println("Next step: copy the file to your project's assets folder:")
-println("  ${File(projectRoot, "app/src/main/assets/digit_model.bin").absolutePath}")
-println()
-println("PowerShell command:")
-println("  Copy-Item -Path \"${modelFile.absolutePath}\" -Destination \"${File(projectRoot, "app/src/main/assets/digit_model.bin").absolutePath}\" -Force")

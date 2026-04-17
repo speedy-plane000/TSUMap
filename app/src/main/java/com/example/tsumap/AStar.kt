@@ -15,6 +15,7 @@ data class AStarStep(
     val closedSet: List<Pair<Int, Int>>,
     val path: List<Pair<Int, Int>>
 )
+
 fun aStar(
     grid: Array<IntArray>,
     start: Pair<Int, Int>,
@@ -39,10 +40,7 @@ fun aStar(
 
     openSet.add(startNode)
 
-    val directions = listOf(
-        1 to 0, -1 to 0,
-        0 to 1, 0 to -1
-    )
+    val directions = listOf(1 to 0, -1 to 0, 0 to 1, 0 to -1)
 
     while (openSet.isNotEmpty()) {
         val current = openSet.minByOrNull { it.f }!!

@@ -61,10 +61,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.offset
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.mutableFloatStateOf
 
 
@@ -80,8 +76,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-
-@OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun MainMapScreen() {
@@ -204,18 +198,6 @@ fun MainMapScreen() {
     val maxScale = 8f
 
     Column(Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text("Map", color = TsuWhite) },
-            navigationIcon = {
-                Icon(
-                    painter = painterResource(R.drawable.tsu_logo),
-                    contentDescription = null,
-                    tint = TsuWhite,
-                    modifier = Modifier.size(30.dp)
-                )
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = TsuBlue)
-        )
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
@@ -393,6 +375,7 @@ fun MainMapScreen() {
                         obstacleMode ||
                         obstacles.isNotEmpty() ||
                         (aStarMode && path.isNotEmpty()) ||
+                        (aStarMode && steps.isNotEmpty()) ||
                         (clusterMode && clusters.isNotEmpty()) ||
                         (isAcoMode && landmarks.any { it.selected }) ||
                         (geneticMode && path.isNotEmpty())
@@ -417,8 +400,7 @@ fun MainMapScreen() {
                                 )
                             }
 
-
-                            if (path.isNotEmpty() && steps.isEmpty()) {
+                            if (path.isNotEmpty()) {
                                 if (path.size > 1) {
                                     for (i in 0 until path.size - 1) {
                                         val (x1, y1) = path[i]
@@ -1086,12 +1068,14 @@ fun MainMapScreen() {
                             return@onStart
                         }
 
+                        val orderedCategoryKeys = CATEGORY_KEYS.filter { it in selectedNeeds }
 
                         val result = buildGeneticPathOnGrid(
                             grid = grid,
                             start = Point(start.first, start.second),
                             allCatalog = foodVenuesCatalog(),
                             need = itemTagsToNeed(selectedNeeds),
+                            selectedCategoryKeys = orderedCategoryKeys
                         )
 
                         path = result.path

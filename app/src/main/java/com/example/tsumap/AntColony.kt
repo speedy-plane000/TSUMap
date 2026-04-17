@@ -31,19 +31,17 @@ fun antColonyPath(
     repeat(iterations) {
         repeat(ants) {
 
-            val visited = mutableSetOf<Int>()
             val path = mutableListOf<Int>()
 
             var current = 0
-            visited.add(current)
             path.add(current)
 
-            while (visited.size < n) {
+            while (path.size < n) {
                 val probs = DoubleArray(n)
                 var sum = 0.0
 
                 for (j in 0 until n) {
-                    if (j !in visited) {
+                    if (j !in path) {
                         val p = pheromone[current][j].pow(alpha) *
                                 (1.0 / (dist[current][j] + 1e-6)).pow(beta)
                         probs[j] = p
@@ -56,7 +54,7 @@ fun antColonyPath(
                 var next = 0
 
                 for (j in 0 until n) {
-                    if (j !in visited) {
+                    if (j !in path) {
                         acc += probs[j]
                         if (acc >= r) {
                             next = j
@@ -65,7 +63,6 @@ fun antColonyPath(
                     }
                 }
 
-                visited.add(next)
                 path.add(next)
                 current = next
             }
