@@ -3,6 +3,32 @@ package com.example.tsumap
 import kotlin.math.abs
 import kotlin.math.sqrt
 
+
+fun convexHull(points: List<Point>): List<Point> {
+    if (points.size <= 2) return points.distinct()
+    fun cross(o: Point, a: Point, b: Point): Long =
+        (a.x - o.x).toLong() * (b.y - o.y) - (a.y - o.y).toLong() * (b.x - o.x)
+    val pts = points.distinct().sortedWith(compareBy<Point> { it.x }.thenBy { it.y })
+    if (pts.size <= 2) return pts
+    val lower = mutableListOf<Point>()
+    for (p in pts) {
+        while (lower.size >= 2 && cross(lower[lower.size - 2], lower[lower.size - 1], p) <= 0) {
+            lower.removeAt(lower.size - 1)
+        }
+        lower.add(p)
+    }
+    val upper = mutableListOf<Point>()
+    for (p in pts.asReversed()) {
+        while (upper.size >= 2 && cross(upper[upper.size - 2], upper[upper.size - 1], p) <= 0) {
+            upper.removeAt(upper.size - 1)
+        }
+        upper.add(p)
+    }
+    lower.removeAt(lower.size - 1)
+    upper.removeAt(upper.size - 1)
+    return lower + upper
+}
+
 enum class DistanceMode {
     EUCLIDEAN,
     ASTAR
