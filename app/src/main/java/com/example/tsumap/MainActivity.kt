@@ -61,6 +61,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.offset
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.mutableFloatStateOf
 
 
@@ -77,6 +81,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
+
+@OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun MainMapScreen() {
@@ -197,6 +204,18 @@ fun MainMapScreen() {
     val maxScale = 8f
 
     Column(Modifier.fillMaxSize()) {
+        TopAppBar(
+            title = {Text("Map", color = TsuWhite)},
+            navigationIcon = {
+                Icon(
+                    painter = painterResource(R.drawable.tsu_logo),
+                    contentDescription = null,
+                    tint = TsuWhite,
+                    modifier = Modifier.size(30.dp)
+                )
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = TsuBlue)
+        )
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
@@ -1064,14 +1083,13 @@ fun MainMapScreen() {
                             return@onStart
                         }
 
-                        val orderedCategoryKeys = CATEGORY_KEYS.filter { it in selectedNeeds }
+
 
                         val result = buildGeneticPathOnGrid(
                             grid = grid,
                             start = Point(start.first, start.second),
                             allCatalog = foodVenuesCatalog(),
                             need = itemTagsToNeed(selectedNeeds),
-                            selectedCategoryKeys = orderedCategoryKeys
                         )
 
                         path = result.path
