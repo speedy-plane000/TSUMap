@@ -77,7 +77,6 @@ fun kMeans(
 
     val k = currentCenters.size
     val clusters = List(k) { Cluster() }
-    val distanceCache = HashMap<Pair<Point, Point>, Double>()
 
     fun centerAsPoint(i: Int): Point {
         return Point(
@@ -86,10 +85,7 @@ fun kMeans(
         )
     }
 
-    fun cachedAStarDistance(a: Point, b: Point): Double {
-        val key = if (a.x < b.x || (a.x == b.x && a.y <= b.y)) a to b else b to a
-        return distanceCache.getOrPut(key) { aStarDistanceForCluster(grid, a, b) }
-    }
+
 
     repeat(iterations) {
         clusters.forEach { it.points.clear() }
@@ -99,7 +95,7 @@ fun kMeans(
                 val c = centerAsPoint(i)
                 val d = when (mode) {
                     DistanceMode.EUCLIDEAN -> euclidean(p, c)
-                    DistanceMode.ASTAR -> cachedAStarDistance(p, c)
+                    DistanceMode.ASTAR -> aStarDistanceForCluster(grid,p, c)
                 }
                 if (d == Double.MAX_VALUE) Double.POSITIVE_INFINITY else d
             } ?: 0
@@ -122,7 +118,7 @@ fun kMeans(
                         val c = centerAsPoint(j)
                         val d = when (mode) {
                             DistanceMode.EUCLIDEAN -> euclidean(p, c)
-                            DistanceMode.ASTAR -> cachedAStarDistance(p, c)
+                            DistanceMode.ASTAR -> aStarDistanceForCluster(grid,p, c)
                         }
                         if (d == Double.MAX_VALUE) Double.POSITIVE_INFINITY else d
                     }
@@ -164,17 +160,7 @@ fun aStarDistanceForCluster(
     return if (len < 0) Double.MAX_VALUE else len.toDouble()
 }
 
-fun getDistance(
-    mode: DistanceMode,
-    grid: Array<IntArray>,
-    a: Point,
-    b: Point,
-): Double {
-    return when (mode) {
-        DistanceMode.EUCLIDEAN -> euclidean(a, b)
-        DistanceMode.ASTAR -> aStarDistanceForCluster(grid, a, b)
-    }
-}
+
 
 private fun isWalkable(
     grid: Array<IntArray>,
