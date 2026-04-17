@@ -1780,7 +1780,6 @@ fun DecisionTreeChatScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(TsuBlue)
-                    .statusBarsPadding()
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
