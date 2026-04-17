@@ -62,7 +62,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.offset
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.mutableFloatStateOf
+
 
 
 class MainActivity : ComponentActivity() {
@@ -77,6 +82,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
+@OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun MainMapScreen() {
@@ -200,6 +207,19 @@ fun MainMapScreen() {
     val maxScale = 8f
 
     Column(Modifier.fillMaxSize()) {
+
+        TopAppBar(
+            title = {Text("Map", color = TsuWhite)},
+            navigationIcon = {
+                Icon(
+                    painter = painterResource(R.drawable.tsu_logo),
+                    contentDescription = null,
+                    tint = TsuWhite,
+                    modifier = Modifier.size(30.dp)
+                )
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = TsuBlue)
+        )
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
@@ -241,11 +261,10 @@ fun MainMapScreen() {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 16.dp)
                         .statusBarsPadding()
-                        .padding(top = 8.dp, start = 16.dp, end = 16.dp)
-                        .background(TsuWhite.copy(alpha = 0.9f), CircleShape)
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                        .padding(top = 64.dp)
+                        .background(TsuWhite)
+                        .padding(horizontal = 16.dp)
                 ) {
                     Text(geneticHintText!!, color = TsuBlue)
                 }
@@ -447,10 +466,49 @@ fun MainMapScreen() {
                                 }
                             }
                             if (clusters.isNotEmpty()) {
-                                val colors =
-                                    listOf(Color.Red, Color.Blue, Color.Green, Color.Magenta)
+
+
+                                val cols = grid[0].size
+                                val rows = grid.size
 
                                 clusters.forEachIndexed { index, cluster ->
+
+                                    val fillColor = when (index) {
+                                        0 -> TsuBlue
+                                        1 -> TsuBlue
+                                        2 -> TsuBlue
+                                        else -> TsuBlue
+                                    }
+                                    val hull = convexHull(cluster.points)
+
+                                    if (hull.size >= 3) {
+                                        val zonePath = androidx.compose.ui.graphics.Path().apply {
+
+                                            val firstPx = startX + (hull[0].x + 0.5f) / cols * actualVisualWidth
+                                            val firstPy = startY + (hull[0].y + 0.5f) / rows * actualVisualHeight
+
+                                            moveTo(firstPx, firstPy)
+
+                                            for (i in 1 until hull.size) {
+                                                val px = startX + (hull[i].x + 0.5f) / cols * actualVisualWidth
+                                                val py = startY + (hull[i].y + 0.5f) / rows * actualVisualHeight
+                                                lineTo(px, py)
+                                            }
+
+                                            close()
+                                        }
+
+                                        drawPath(
+                                            path = zonePath,
+                                            color = fillColor.copy(alpha = 0.20f)
+                                        )
+
+                                        drawPath(
+                                            path = zonePath,
+                                            color = fillColor.copy(alpha = 0.90f),
+                                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f)
+                                        )
+                                    }
 
                                     cluster.points.forEach { point ->
                                         val px =
@@ -496,20 +554,6 @@ fun MainMapScreen() {
                                             }
                                         }
                                     }
-                                }
-
-                                differentPoints.forEach { point ->
-
-                                    val px =
-                                        startX + (point.x + 0.5f) / grid[0].size * actualVisualWidth
-                                    val py =
-                                        startY + (point.y + 0.5f) / grid.size * actualVisualHeight
-
-                                    drawCircle(
-                                        color = Color.Yellow,
-                                        radius = 12f,
-                                        center = Offset(px, py)
-                                    )
                                 }
                             }
                             if (isAcoMode) {
@@ -715,35 +759,37 @@ fun MainMapScreen() {
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (geneticUiMode) {
-                    item {
-                        Button(
-                            onClick = { showGeneticItemsSheet = true },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = TsuBlue,
-                                contentColor = TsuWhite
-                            )
-                        ) { Text("Поменять товары") }
-                    }
+                    if (geneticStartPoint != null){
+                        item {
+                            Button(
+                                onClick = { showGeneticItemsSheet = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TsuBlue,
+                                    contentColor = TsuWhite
+                                )
+                            ) { Text("Поменять товары") }
+                        }
 
-                    item {
-                        Button(
-                            onClick = {
-                                geneticUiMode = false
-                                geneticMode = false
-                                selectionMode = null
-                                geneticHintText = null
-                                showGeneticItemsSheet = false
+                        item {
+                            Button(
+                                onClick = {
+                                    geneticUiMode = false
+                                    geneticMode = false
+                                    selectionMode = null
+                                    geneticHintText = null
+                                    showGeneticItemsSheet = false
 
-                                path = emptyList()
-                                geneticStops = emptyList()
-                                geneticStartPoint = null
-                                selectedNeeds = emptySet()
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = TsuBlue,
-                                contentColor = TsuWhite
-                            )
-                        ) { Text("Назад") }
+                                    path = emptyList()
+                                    geneticStops = emptyList()
+                                    geneticStartPoint = null
+                                    selectedNeeds = emptySet()
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TsuBlue,
+                                    contentColor = TsuWhite
+                                )
+                            ) { Text("Назад") }
+                        }
                     }
                 } else if (!clusterMode && !aStarMode) {
                     item {
@@ -812,7 +858,8 @@ fun MainMapScreen() {
                                 selectedNeeds = emptySet()
 
                                 geneticUiMode = true
-                                geneticHintText = "Выберите точку старта для генетического маршрута"
+                                geneticHintText = "Выберите точку старта для генетического алгоритма"
+
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = TsuBlue,
@@ -1116,14 +1163,13 @@ fun MainMapScreen() {
                             return@onStart
                         }
 
-                        val orderedCategoryKeys = CATEGORY_KEYS.filter { it in selectedNeeds }
+
 
                         val result = buildGeneticPathOnGrid(
                             grid = grid,
                             start = Point(start.first, start.second),
                             allCatalog = foodVenuesCatalog(),
                             need = itemTagsToNeed(selectedNeeds),
-                            selectedCategoryKeys = orderedCategoryKeys
                         )
 
                         path = result.path
@@ -1841,7 +1887,7 @@ private fun featureRu(feature: String): String = when (feature) {
     "budget" -> "Какой у вас бюджет?"
     "time_available" -> "Сколько у вас времени?"
     "food_type" -> "Что хотите?"
-    "queue_tolerance" -> "Готовы ли стоять в очереди?"
+    "queue_tolerance" -> "Интерес стоять в очереди?"
     "weather" -> "Какая погода?"
     else -> feature
 }

@@ -1,6 +1,7 @@
 package com.example.tsumap
 
 
+
 import java.time.LocalDateTime
 import java.time.LocalTime
 import kotlin.math.hypot
@@ -8,7 +9,7 @@ import kotlin.math.roundToLong
 import kotlin.random.Random
 
 
-enum class ItemTag {
+enum class ItemTag{
     DISPOSABLE,
     RAMEN, WOK, RICE,
     SHAWARMA,
@@ -53,10 +54,6 @@ data class GeneticRouteResult(
     val stops: List<Point>
 )
 
-data class StitchedPathResult(
-    val path: List<Pair<Int, Int>>,
-    val reachedStops: List<Point>
-)
 
 typealias Chromosome = IntArray
 
@@ -192,7 +189,6 @@ fun canVisitAt(hours: VenueHours, time: LocalDateTime): Boolean {
                 cur >= hours.open || cur < hours.close
             }
         }
-
         else -> true
     }
 }
@@ -270,6 +266,8 @@ fun randomPermutation(n: Int, rng: Random = Random.Default): Chromosome {
 }
 
 
+
+
 fun tournamentPick(costs: DoubleArray, k: Int, rng: Random = Random.Default): Int {
     var best = rng.nextInt(costs.size)
     var bestCost = costs[best]
@@ -312,6 +310,7 @@ fun oxCrossover(a: Chromosome, b: Chromosome, rng: Random = Random.Default): Chr
 }
 
 
+
 fun mutateSwap(ch: Chromosome, rng: Random = Random.Default) {
     if (ch.size < 2) return
     val i = rng.nextInt(ch.size)
@@ -323,6 +322,7 @@ fun mutateSwap(ch: Chromosome, rng: Random = Random.Default) {
 }
 
 
+
 data class GaParams(
     val populationSize: Int = 120,
     val maxGenerations: Int = 500,
@@ -332,7 +332,6 @@ data class GaParams(
     val elitism: Int = 2,
     val immigrants: Int = 2
 )
-
 fun runGeneticAlgorithm(
     startPoint: Point,
     startTime: LocalDateTime,
@@ -345,59 +344,71 @@ fun runGeneticAlgorithm(
 ): Pair<RouteEval, Chromosome> {
     val n = venues.size
     require(n >= 1) { "Нужен хотя бы один кандидат" }
+
     val population = Array(params.populationSize) { randomPermutation(n, rng) }
     val costs = DoubleArray(params.populationSize)
+
     fun evalAll() {
         for (i in population.indices) {
-            costs[i] =
-                evaluateRoute(startPoint, startTime, need, venues, population[i], config).cost
+            costs[i] = evaluateRoute(startPoint, startTime, need, venues, population[i], config).cost
         }
     }
+
     evalAll()
     val bestEverIdx = costs.indices.minBy { costs[it] }
     var bestEverChrom = population[bestEverIdx].copyOf()
     var bestEverEval = evaluateRoute(startPoint, startTime, need, venues, bestEverChrom, config)
+
     for (gen in 0 until params.maxGenerations) {
         evalAll()
+
         val bestIdx = costs.indices.minBy { costs[it] }
-        val bestThisGen =
-            evaluateRoute(startPoint, startTime, need, venues, population[bestIdx], config)
+        val bestThisGen = evaluateRoute(startPoint, startTime, need, venues, population[bestIdx], config)
+
         onGeneration(gen, bestThisGen, population[bestIdx].copyOf())
+
         if (costs[bestIdx] < bestEverEval.cost) {
             bestEverChrom = population[bestIdx].copyOf()
             bestEverEval = evaluateRoute(startPoint, startTime, need, venues, bestEverChrom, config)
         }
+
         val sorted = costs.indices.sortedBy { costs[it] }
         val next = ArrayList<Chromosome>(params.populationSize)
         val elite = params.elitism.coerceAtMost(params.populationSize)
+
         for (e in 0 until elite) {
             next.add(population[sorted[e]].copyOf())
         }
+
         while (next.size < params.populationSize) {
             val p1 = population[tournamentPick(costs, params.tournamentK, rng)].copyOf()
             val p2 = population[tournamentPick(costs, params.tournamentK, rng)].copyOf()
-            val child = if (rng.nextDouble() < params.crossoverRate) oxCrossover(
-                p1,
-                p2,
-                rng
-            ) else p1.copyOf()
+            val child = if (rng.nextDouble() < params.crossoverRate) oxCrossover(p1, p2, rng) else p1.copyOf()
             if (rng.nextDouble() < params.mutationRate) mutateSwap(child, rng)
             next.add(child)
         }
+
         val imm = params.immigrants.coerceAtMost(next.size)
+
         for (i in 0 until imm) {
             next[next.size - 1 - i] = randomPermutation(n, rng)
         }
+
         for (i in population.indices) {
             population[i] = next[i]
         }
+
     }
+
     evalAll()
+
     val finalIdx = costs.indices.minBy { costs[it] }
+
     if (costs[finalIdx] < bestEverEval.cost) {
         bestEverChrom = population[finalIdx].copyOf()
         bestEverEval = evaluateRoute(startPoint, startTime, need, venues, bestEverChrom, config)
     }
+
     return bestEverEval to bestEverChrom
 }
 
@@ -406,15 +417,9 @@ fun buildGeneticPathOnGrid(
     start: Point,
     allCatalog: List<FoodPlace>,
     need: Set<ItemTag>,
-    selectedCategoryKeys: List<String> = emptyList(),
     now: LocalDateTime = LocalDateTime.now(),
     kmPerGridUnit: Double = 0.01
 ): GeneticRouteResult {
-    val empty = GeneticRouteResult(
-        eval = RouteEval(1e9, 0.0, need, 0, emptyList()),
-        path = emptyList(),
-        stops = emptyList()
-    )
     val snappedStartPair = findNearestRoad(grid, start.x, start.y)
     val snappedStart = if (snappedStartPair != null) {
         Point(snappedStartPair.first, snappedStartPair.second)
@@ -422,42 +427,39 @@ fun buildGeneticPathOnGrid(
         start
     }
 
-    val snappedCatalog = allCatalog.mapNotNull { place ->
-        val s = findNearestRoad(grid, place.point.x, place.point.y)
-        if (s != null) place.copy(point = Point(s.first, s.second)) else null
+    val rawCandidates = candidatesFor(need, allCatalog)
+    if (rawCandidates.isEmpty()) {
+        return GeneticRouteResult(
+            eval = RouteEval(1e9, 0.0, need, 0, emptyList()),
+            path = emptyList(),
+            stops = emptyList()
+        )
     }
-    if (snappedCatalog.isEmpty()) return empty
 
-    val pickedVenues = if (selectedCategoryKeys.isNotEmpty()) {
-        pickOneVenuePerCategory(selectedCategoryKeys, snappedCatalog, snappedStart, now)
-    } else {
-        candidatesFor(need, snappedCatalog)
+    val candidates = rawCandidates.map { place ->
+        val s = findNearestRoad(grid, place.point.x, place.point.y)
+        if (s != null) place.copy(point = Point(s.first, s.second)) else place
     }
-    if (pickedVenues.isEmpty()) return empty
 
     val config = RouteConfig(kmPerGridUnit = kmPerGridUnit)
-    val orderedVenues = nearestNeighborOrder(snappedStart, pickedVenues)
-    val orderedStops = orderedVenues.map { it.point }
-    val stitched = stitchAstarPath(grid, snappedStart, orderedStops)
 
-    var totalDist = 0.0
-    var prev = snappedStart
-    for (venue in orderedVenues) {
-        totalDist += gridEuclideanDistance(prev, venue.point)
-        prev = venue.point
-    }
-    val routeEval = RouteEval(
-        cost = totalDist,
-        totalMinutes = pathTravelMinutes(totalDist, config),
-        uncovered = emptySet(),
-        closedVisits = 0,
-        visitedOrder = orderedVenues.indices.toList()
+    val (bestEval, _) = runGeneticAlgorithm(
+        startPoint = snappedStart,
+        startTime = now,
+        need = need,
+        venues = candidates,
+        config = config,
+        onGeneration = { _, _, _ -> }
     )
 
+    val orderedVenues = bestEval.visitedOrder.map { idx -> candidates[idx] }
+    val orderedStops = orderedVenues.map { it.point }
+    val path = stitchAstarPath(grid, snappedStart, orderedStops)
+
     return GeneticRouteResult(
-        eval = routeEval,
-        path = stitched.path,
-        stops = stitched.reachedStops
+        eval = bestEval,
+        path = path,
+        stops = orderedStops
     )
 }
 
@@ -465,100 +467,42 @@ fun stitchAstarPath(
     grid: Array<IntArray>,
     start: Point,
     targets: List<Point>
-): StitchedPathResult {
-    if (targets.isEmpty()) return StitchedPathResult(path = emptyList(), reachedStops = emptyList())
+): List<Pair<Int, Int>> {
+    if (targets.isEmpty()) return emptyList()
 
     val full = mutableListOf<Pair<Int, Int>>()
-    val reached = mutableListOf<Point>()
     var cur = start
     var hasAnySegment = false
 
     for (p in targets) {
-        if (cur.x == p.x && cur.y == p.y) {
-            if (full.isEmpty()) {
-                full.add(cur.x to cur.y)
-                hasAnySegment = true
-            }
-            reached.add(p)
-            continue
-        }
         val seg = aStar(grid, cur.x to cur.y, p.x to p.y)
         if (seg.isNotEmpty()) {
             hasAnySegment = true
             if (full.isEmpty()) full.addAll(seg) else full.addAll(seg.drop(1))
-            reached.add(p)
-            cur = p
         }
+        cur = p
     }
 
-    return if (hasAnySegment) {
-        StitchedPathResult(path = full, reachedStops = reached)
-    } else {
-        StitchedPathResult(path = emptyList(), reachedStops = emptyList())
-    }
+    return if (hasAnySegment) full else emptyList()
 }
 
-val CATEGORY_KEYS = listOf(
-    "Одноразка", "Рамен/Вок/Рис", "Шаурма", "Выпечка",
-    "Напитки", "Снеки", "Кофе", "Комплексный обед", "Блины", "Фастфуд"
-)
+fun itemTagsToNeed(selected: Set<String>): Set<ItemTag> {
+    val result = mutableSetOf<ItemTag>()
 
-fun categoryToTags(key: String): Set<ItemTag> =
-    when (key.trim()) {
-        "Одноразка" -> setOf(ItemTag.DISPOSABLE)
-        "Рамен/Вок/Рис" -> setOf(ItemTag.RAMEN, ItemTag.WOK, ItemTag.RICE)
-        "Шаурма" -> setOf(ItemTag.SHAWARMA)
-        "Выпечка" -> setOf(ItemTag.BAKERY)
-        "Напитки" -> setOf(ItemTag.DRINKS)
-        "Снеки" -> setOf(ItemTag.SNACKS)
-        "Кофе" -> setOf(ItemTag.COFFEE)
-        "Комплексный обед" -> setOf(ItemTag.COMBO_LUNCH)
-        "Блины" -> setOf(ItemTag.PANCAKES)
-        "Фастфуд" -> setOf(ItemTag.FAST_FOOD)
-        else -> emptySet()
-    }
-
-fun itemTagsToNeed(selected: Set<String>): Set<ItemTag> =
-    selected.flatMapTo(mutableSetOf()) { categoryToTags(it) }
-
-fun pickOneVenuePerCategory(
-    categoryKeys: List<String>,
-    snappedCatalog: List<FoodPlace>,
-    startPoint: Point,
-    now: LocalDateTime
-): List<FoodPlace> {
-    val usedIndices = mutableSetOf<Int>()
-    val result = mutableListOf<FoodPlace>()
-    for (key in categoryKeys) {
-        val catTags = categoryToTags(key)
-        if (catTags.isEmpty()) continue
-        val matching = snappedCatalog.withIndex().filter { (idx, place) ->
-            idx !in usedIndices && place.offers.any { it in catTags }
-        }
-        if (matching.isEmpty()) continue
-
-        val pool = matching.filter { (_, place) -> canVisitAt(place.hours, now) }
-            .ifEmpty { matching }
-        val best = pool.minByOrNull { (_, place) -> gridEuclideanDistance(startPoint, place.point) }
-        if (best != null) {
-            result.add(best.value)
-            usedIndices.add(best.index)
+    selected.forEach { key ->
+        when (key.trim()) {
+            "Одноразовая посуда" -> result += ItemTag.DISPOSABLE
+            "Рамен/Вок/Рис" -> result += setOf(ItemTag.RAMEN, ItemTag.WOK, ItemTag.RICE)
+            "Шаурма" -> result += ItemTag.SHAWARMA
+            "Выпечка" -> result += ItemTag.BAKERY
+            "Напитки" -> result += ItemTag.DRINKS
+            "Снеки" -> result += ItemTag.SNACKS
+            "Кофе" -> result += ItemTag.COFFEE
+            "Комплексный обед" -> result += ItemTag.COMBO_LUNCH
+            "Блины" -> result += ItemTag.PANCAKES
+            "Фастфуд" -> result += ItemTag.FAST_FOOD
         }
     }
 
-    return result
-}
-
-fun nearestNeighborOrder(start: Point, venues: List<FoodPlace>): List<FoodPlace> {
-    if (venues.isEmpty()) return emptyList()
-    val remaining = venues.toMutableList()
-    val result = mutableListOf<FoodPlace>()
-    var cur = start
-    while (remaining.isNotEmpty()) {
-        val nearest = remaining.minByOrNull { gridEuclideanDistance(cur, it.point) } ?: break
-        result.add(nearest)
-        remaining.remove(nearest)
-        cur = nearest.point
-    }
     return result
 }

@@ -3,6 +3,41 @@ package com.example.tsumap
 import kotlin.math.abs
 import kotlin.math.sqrt
 
+
+fun convexHull(points: List<Point>): List<Point> {
+    if (points.size <= 2) return points.distinct()
+
+    fun cross(o: Point, a: Point, b: Point): Long =
+        (a.x - o.x).toLong() * (b.y - o.y) - (a.y - o.y).toLong() * (b.x - o.x)
+
+    val pts = points.distinct().sortedWith(compareBy<Point> { it.x }.thenBy { it.y })
+
+    if (pts.size <= 2) return pts
+
+    val lower = mutableListOf<Point>()
+
+    for (p in pts) {
+        while (lower.size >= 2 && cross(lower[lower.size - 2], lower[lower.size - 1], p) <= 0) {
+            lower.removeAt(lower.size - 1)
+        }
+        lower.add(p)
+    }
+
+    val upper = mutableListOf<Point>()
+
+    for (p in pts.asReversed()) {
+        while (upper.size >= 2 && cross(upper[upper.size - 2], upper[upper.size - 1], p) <= 0) {
+            upper.removeAt(upper.size - 1)
+        }
+        upper.add(p)
+    }
+
+    lower.removeAt(lower.size - 1)
+    upper.removeAt(upper.size - 1)
+
+    return lower + upper
+}
+
 enum class DistanceMode {
     EUCLIDEAN,
     ASTAR
@@ -42,7 +77,6 @@ fun kMeans(
 
     val k = currentCenters.size
     val clusters = List(k) { Cluster() }
-    val distanceCache = HashMap<Pair<Point, Point>, Double>()
 
     fun centerAsPoint(i: Int): Point {
         return Point(
@@ -51,10 +85,7 @@ fun kMeans(
         )
     }
 
-    fun cachedAStarDistance(a: Point, b: Point): Double {
-        val key = if (a.x < b.x || (a.x == b.x && a.y <= b.y)) a to b else b to a
-        return distanceCache.getOrPut(key) { aStarDistanceForCluster(grid, a, b) }
-    }
+
 
     repeat(iterations) {
         clusters.forEach { it.points.clear() }
@@ -64,7 +95,7 @@ fun kMeans(
                 val c = centerAsPoint(i)
                 val d = when (mode) {
                     DistanceMode.EUCLIDEAN -> euclidean(p, c)
-                    DistanceMode.ASTAR -> cachedAStarDistance(p, c)
+                    DistanceMode.ASTAR -> aStarDistanceForCluster(grid,p, c)
                 }
                 if (d == Double.MAX_VALUE) Double.POSITIVE_INFINITY else d
             } ?: 0
@@ -87,7 +118,7 @@ fun kMeans(
                         val c = centerAsPoint(j)
                         val d = when (mode) {
                             DistanceMode.EUCLIDEAN -> euclidean(p, c)
-                            DistanceMode.ASTAR -> cachedAStarDistance(p, c)
+                            DistanceMode.ASTAR -> aStarDistanceForCluster(grid,p, c)
                         }
                         if (d == Double.MAX_VALUE) Double.POSITIVE_INFINITY else d
                     }
@@ -125,21 +156,11 @@ fun aStarDistanceForCluster(
         return Double.MAX_VALUE
     }
 
-    val len = aStarLength(grid, a.x to a.y, b.x to b.y)
-    return if (len < 0) Double.MAX_VALUE else len.toDouble()
+    val dist = aStarDistance(grid, a.x to a.y, b.x to b.y)
+    return if (dist < 0) Double.MAX_VALUE else dist.toDouble()
 }
 
-fun getDistance(
-    mode: DistanceMode,
-    grid: Array<IntArray>,
-    a: Point,
-    b: Point,
-): Double {
-    return when (mode) {
-        DistanceMode.EUCLIDEAN -> euclidean(a, b)
-        DistanceMode.ASTAR -> aStarDistanceForCluster(grid, a, b)
-    }
-}
+
 
 private fun isWalkable(
     grid: Array<IntArray>,
@@ -149,83 +170,7 @@ private fun isWalkable(
     return y in grid.indices && x in grid[0].indices && grid[y][x] == 1
 }
 
-private data class NodeRec(
-    val x: Int,
-    val y: Int,
-    var g: Int = Int.MAX_VALUE,
-    var h: Int = 0
-) {
-    val f: Int
-        get() = g + h
-}
 
-fun aStarLength(
-    grid: Array<IntArray>,
-    start: Pair<Int, Int>,
-    end: Pair<Int, Int>
-): Int {
-    val rows = grid.size
-    val cols = grid[0].size
-
-    fun heuristic(x: Int, y: Int): Int {
-        return abs(x - end.first) + abs(y - end.second)
-    }
-
-    if (!isWalkable(grid, start.first, start.second) ||
-        !isWalkable(grid, end.first, end.second)
-    ) {
-        return -1
-    }
-
-    val nodes = Array(rows) { y -> Array(cols) { x -> NodeRec(x, y) } }
-    val closed = Array(rows) { BooleanArray(cols) }
-    val openSet = mutableListOf<NodeRec>()
-
-    val startNode = nodes[start.second][start.first]
-    startNode.g = 0
-    startNode.h = heuristic(startNode.x, startNode.y)
-    openSet.add(startNode)
-
-    val dirs = arrayOf(
-        1 to 0,
-        -1 to 0,
-        0 to 1,
-        0 to -1
-    )
-
-    while (openSet.isNotEmpty()) {
-        val current = openSet.minByOrNull { it.f } ?: break
-        openSet.remove(current)
-
-        if (closed[current.y][current.x]) continue
-        closed[current.y][current.x] = true
-
-        if (current.x == end.first && current.y == end.second) {
-            return current.g
-        }
-
-        for ((dx, dy) in dirs) {
-            val nx = current.x + dx
-            val ny = current.y + dy
-
-            if (!isWalkable(grid, nx, ny) || closed[ny][nx]) continue
-
-            val neighbor = nodes[ny][nx]
-            val newG = current.g + 1
-
-            if (newG < neighbor.g) {
-                neighbor.g = newG
-                neighbor.h = heuristic(nx, ny)
-
-                if (neighbor !in openSet) {
-                    openSet.add(neighbor)
-                }
-            }
-        }
-    }
-
-    return -1
-}
 
 fun snapPointsToRoad(
     grid: Array<IntArray>,
