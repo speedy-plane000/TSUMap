@@ -555,20 +555,6 @@ fun MainMapScreen() {
                                         }
                                     }
                                 }
-
-                                differentPoints.forEach { point ->
-
-                                    val px =
-                                        startX + (point.x + 0.5f) / grid[0].size * actualVisualWidth
-                                    val py =
-                                        startY + (point.y + 0.5f) / grid.size * actualVisualHeight
-
-                                    drawCircle(
-                                        color = Color.Yellow,
-                                        radius = 12f,
-                                        center = Offset(px, py)
-                                    )
-                                }
                             }
                             if (isAcoMode) {
                                 val selected = landmarks.filter { it.selected }
