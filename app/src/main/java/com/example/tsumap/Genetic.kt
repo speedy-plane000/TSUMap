@@ -344,32 +344,42 @@ fun runGeneticAlgorithm(
 ): Pair<RouteEval, Chromosome> {
     val n = venues.size
     require(n >= 1) { "Нужен хотя бы один кандидат" }
+
     val population = Array(params.populationSize) { randomPermutation(n, rng) }
     val costs = DoubleArray(params.populationSize)
+
     fun evalAll() {
         for (i in population.indices) {
             costs[i] = evaluateRoute(startPoint, startTime, need, venues, population[i], config).cost
         }
     }
+
     evalAll()
     val bestEverIdx = costs.indices.minBy { costs[it] }
     var bestEverChrom = population[bestEverIdx].copyOf()
     var bestEverEval = evaluateRoute(startPoint, startTime, need, venues, bestEverChrom, config)
+
     for (gen in 0 until params.maxGenerations) {
         evalAll()
+
         val bestIdx = costs.indices.minBy { costs[it] }
         val bestThisGen = evaluateRoute(startPoint, startTime, need, venues, population[bestIdx], config)
+
         onGeneration(gen, bestThisGen, population[bestIdx].copyOf())
+
         if (costs[bestIdx] < bestEverEval.cost) {
             bestEverChrom = population[bestIdx].copyOf()
             bestEverEval = evaluateRoute(startPoint, startTime, need, venues, bestEverChrom, config)
         }
+
         val sorted = costs.indices.sortedBy { costs[it] }
         val next = ArrayList<Chromosome>(params.populationSize)
         val elite = params.elitism.coerceAtMost(params.populationSize)
+
         for (e in 0 until elite) {
             next.add(population[sorted[e]].copyOf())
         }
+
         while (next.size < params.populationSize) {
             val p1 = population[tournamentPick(costs, params.tournamentK, rng)].copyOf()
             val p2 = population[tournamentPick(costs, params.tournamentK, rng)].copyOf()
@@ -377,20 +387,28 @@ fun runGeneticAlgorithm(
             if (rng.nextDouble() < params.mutationRate) mutateSwap(child, rng)
             next.add(child)
         }
+
         val imm = params.immigrants.coerceAtMost(next.size)
+
         for (i in 0 until imm) {
             next[next.size - 1 - i] = randomPermutation(n, rng)
         }
+
         for (i in population.indices) {
             population[i] = next[i]
         }
+
     }
+
     evalAll()
+
     val finalIdx = costs.indices.minBy { costs[it] }
+
     if (costs[finalIdx] < bestEverEval.cost) {
         bestEverChrom = population[finalIdx].copyOf()
         bestEverEval = evaluateRoute(startPoint, startTime, need, venues, bestEverChrom, config)
     }
+
     return bestEverEval to bestEverChrom
 }
 

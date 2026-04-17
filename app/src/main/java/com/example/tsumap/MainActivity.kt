@@ -480,22 +480,29 @@ fun MainMapScreen() {
                                         else -> TsuBlue
                                     }
                                     val hull = convexHull(cluster.points)
+
                                     if (hull.size >= 3) {
                                         val zonePath = androidx.compose.ui.graphics.Path().apply {
+
                                             val firstPx = startX + (hull[0].x + 0.5f) / cols * actualVisualWidth
                                             val firstPy = startY + (hull[0].y + 0.5f) / rows * actualVisualHeight
+
                                             moveTo(firstPx, firstPy)
+
                                             for (i in 1 until hull.size) {
                                                 val px = startX + (hull[i].x + 0.5f) / cols * actualVisualWidth
                                                 val py = startY + (hull[i].y + 0.5f) / rows * actualVisualHeight
                                                 lineTo(px, py)
                                             }
+
                                             close()
                                         }
+
                                         drawPath(
                                             path = zonePath,
                                             color = fillColor.copy(alpha = 0.20f)
                                         )
+
                                         drawPath(
                                             path = zonePath,
                                             color = fillColor.copy(alpha = 0.90f),
