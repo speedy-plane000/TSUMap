@@ -418,9 +418,16 @@ fun buildGeneticPathOnGrid(
         )
     }
 
-    val candidates = rawCandidates.map { place ->
+    val candidates = rawCandidates.mapNotNull { place ->
         val s = findNearestRoad(grid, place.point.x, place.point.y)
-        if (s != null) place.copy(point = Point(s.first, s.second)) else place
+        if (s != null) place.copy(point = Point(s.first, s.second)) else null
+    }
+    if (candidates.isEmpty()) {
+        return GeneticRouteResult(
+            eval = RouteEval(1e9, 0.0, need, 0, emptyList()),
+            path = emptyList(),
+            stops = emptyList()
+        )
     }
 
     val config = RouteConfig(kmPerGridUnit = kmPerGridUnit)
@@ -457,6 +464,10 @@ fun stitchAstarPath(
     var hasAnySegment = false
 
     for (p in targets) {
+        if (cur.x == p.x && cur.y == p.y) {
+            cur = p
+            continue
+        }
         val seg = aStar(grid, cur.x to cur.y, p.x to p.y)
         if (seg.isNotEmpty()) {
             hasAnySegment = true

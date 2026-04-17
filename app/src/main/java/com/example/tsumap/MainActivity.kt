@@ -2,7 +2,9 @@ package com.example.tsumap
 
 import android.annotation.SuppressLint
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -16,8 +18,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
@@ -38,7 +38,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
@@ -67,12 +66,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.offset
-import androidx.compose.material3.Icon
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.mutableFloatStateOf
 import com.google.android.gms.location.LocationServices
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.TopAppBarDefaults
 
 
 
@@ -88,7 +83,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun MainMapScreen() {
@@ -113,7 +107,7 @@ fun MainMapScreen() {
         if (steps.isNotEmpty()) {
             for (i in steps.indices) {
                 currentStep = i
-                kotlinx.coroutines.delay(15)
+                kotlinx.coroutines.delay(10)
             }
 
             path = steps.last().path
@@ -222,18 +216,6 @@ fun MainMapScreen() {
     val maxScale = 8f
 
     Column(Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = {Text("Map", color = TsuWhite)},
-            navigationIcon = {
-                Icon(
-                    painter = painterResource(R.drawable.tsu_logo),
-                    contentDescription = null,
-                    tint = TsuWhite
-                )
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = TsuBlue)
-        )
-
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
@@ -256,21 +238,19 @@ fun MainMapScreen() {
             val startX = (boxWidth - actualVisualWidth) / 2f
             val startY = (boxHeight - actualVisualHeight) / 2f
 
-            val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
+            fun clampOffset(rawOffset: Offset, s: Float): Offset {
+                val cx = boxWidth / 2f
+                val cy = boxHeight / 2f
 
-                val newScale = (scale * zoomChange).coerceIn(minScale, maxScale)
+                val maxX = s * (cx - startX) - cx
+                val minX = cx + s * (cx - startX - actualVisualWidth)
+                val clampedX = if (minX <= maxX) rawOffset.x.coerceIn(minX, maxX) else 0f
 
-                val maxX = maxOf(0f, (actualVisualWidth * newScale - boxWidth) / 2)
-                val maxY = maxOf(0f, (actualVisualHeight * newScale - boxHeight) / 2)
+                val maxY = s * (cy - startY) - cy
+                val minY = cy + s * (cy - startY - actualVisualHeight)
+                val clampedY = if (minY <= maxY) rawOffset.y.coerceIn(minY, maxY) else 0f
 
-                val newOffset = offset + panChange
-
-                offset = Offset(
-                    x = newOffset.x.coerceIn(-maxX, maxX),
-                    y = newOffset.y.coerceIn(-maxY, maxY)
-                )
-
-                scale = newScale
+                return Offset(clampedX, clampedY)
             }
 
             if (geneticHintText != null) {
@@ -278,6 +258,8 @@ fun MainMapScreen() {
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .padding(top = 16.dp)
+                        .statusBarsPadding()
+                        .padding(top = 8.dp, start = 16.dp, end = 16.dp)
                         .background(TsuWhite.copy(alpha = 0.9f), CircleShape)
                         .padding(horizontal = 16.dp, vertical = 10.dp)
                 ) {
@@ -291,7 +273,20 @@ fun MainMapScreen() {
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(RectangleShape)
-                    .transformable(transformableState)
+                    .pointerInput(Unit) {
+                        detectTransformGestures { centroid, panChange, zoomChange, _ ->
+                            val oldScale = scale
+                            val newScale = (oldScale * zoomChange).coerceIn(minScale, maxScale)
+                            val scaleFactor = newScale / oldScale
+
+                            val center = Offset(boxWidth / 2f, boxHeight / 2f)
+                            val newOffset =
+                                (1f - scaleFactor) * (centroid - center) + scaleFactor * offset + panChange
+
+                            scale = newScale
+                            offset = clampOffset(newOffset, newScale)
+                        }
+                    }
                     .graphicsLayer(
                         scaleX = scale,
                         scaleY = scale,
@@ -674,7 +669,8 @@ fun MainMapScreen() {
                 onClick = { showRoads = !showRoads },
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 16.dp, end = 16.dp),
+                    .statusBarsPadding()
+                    .padding(top = 8.dp, end = 16.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = TsuBlue,
                     contentColor = TsuWhite
