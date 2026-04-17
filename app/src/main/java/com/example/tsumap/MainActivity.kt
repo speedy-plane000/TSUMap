@@ -1892,7 +1892,7 @@ private fun featureRu(feature: String): String = when (feature) {
     "budget" -> "Какой у вас бюджет?"
     "time_available" -> "Сколько у вас времени?"
     "food_type" -> "Что хотите?"
-    "queue_tolerance" -> "Готовы ли стоять в очереди?"
+    "queue_tolerance" -> "Интересе стоять в очереди?"
     "weather" -> "Какая погода?"
     else -> feature
 }
