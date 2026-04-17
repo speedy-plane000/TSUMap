@@ -23,11 +23,6 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.foundation.layout.Row
 import android.content.Context
-import android.graphics.BitmapFactory
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -67,7 +62,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.mutableFloatStateOf
-import com.google.android.gms.location.LocationServices
 
 
 
@@ -86,22 +80,12 @@ class MainActivity : ComponentActivity() {
 @SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun MainMapScreen() {
-
-    val context = LocalContext.current
-    LaunchedEffect(Unit) {
-        requestLocationPermission(context)
-    }
-
-
     var decisionTreeMode by remember { mutableStateOf(false) }
     var decisionTreeRoot by remember { mutableStateOf<DecisionNode?>(null) }
-    var decisionTreeCurrentNode by remember { mutableStateOf<DecisionNode?>(null) }
-    var decisionTreeAnswers by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var decisionTreePath by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
-    var decisionTreeResult by remember { mutableStateOf<String?>(null) }
     var steps by remember { mutableStateOf<List<AStarStep>>(emptyList()) }
     var currentStep by remember { mutableStateOf(0) }
     var path by remember { mutableStateOf<List<Pair<Int, Int>>>(emptyList()) }
+    val context = LocalContext.current
 
     LaunchedEffect(steps) {
         if (steps.isNotEmpty()) {
@@ -120,13 +104,11 @@ fun MainMapScreen() {
             val features = rows.first().features.keys.toList()
             val root = trainDecisionTree(rows, features, forceRootFeature = "food_type")
             decisionTreeRoot = root
-            decisionTreeCurrentNode = root
         }
     }
     val grid = remember {
         loadGrid(context)
     }
-    val bitmap = BitmapFactory.decodeResource(context.resources, R.drawable.tsu_pixel)
 
     data class CafePoint(
         val name: String,
@@ -135,7 +117,6 @@ fun MainMapScreen() {
 
     var landmarks by remember {
         mutableStateOf(listOf(
-            Landmark("Геолокация сейчас", Point(0, 0), isUserLocation = true),
             Landmark("Декоративный Домик", Point(28, 75)),
             Landmark("Ботанический сад", Point(55, 66)),
             Landmark("Скульптура Белки", Point(116, 88)),
@@ -281,7 +262,7 @@ fun MainMapScreen() {
 
                             val center = Offset(boxWidth / 2f, boxHeight / 2f)
                             val newOffset =
-                                (1f - scaleFactor) * (centroid - center) + scaleFactor * offset + panChange
+                                (centroid - center) * (1f - scaleFactor) + offset * scaleFactor + panChange
 
                             scale = newScale
                             offset = clampOffset(newOffset, newScale)
@@ -860,10 +841,6 @@ fun MainMapScreen() {
 
 
                                 decisionTreeMode = true
-                                decisionTreeAnswers = emptyMap()
-                                decisionTreePath = emptyList()
-                                decisionTreeResult = null
-                                decisionTreeCurrentNode = decisionTreeRoot
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = TsuBlue,
@@ -924,24 +901,6 @@ fun MainMapScreen() {
                             )
                         ) {
                             Text("Финиш")
-                        }
-                    }
-
-                    item {
-                        Button(
-                            onClick = {
-                                getCurrentLocation(context) { lat, lng ->
-                                    val point = mapLatLngToGrid(lat, lng, grid)
-                                    val snapped = findNearestRoad(grid, point.x, point.y)
-                                    startPoint = snapped ?: (point.x to point.y)
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = TsuBlue,
-                                contentColor = TsuWhite
-                            )
-                        ) {
-                            Text("Моё местоположение")
                         }
                     }
 
@@ -1060,34 +1019,10 @@ fun MainMapScreen() {
                 LandmarkSelectionSheet(
                     landmarks = landmarks,
                     onToggle = { index ->
-                        val lm = landmarks[index]
-
-                        if (lm.isUserLocation) {
-                            getCurrentLocation(context) { lat, lng ->
-
-                                val mappedPoint = mapLatLngToGrid(lat, lng, grid)
-
-                                println("GPS: $lat $lng -> GRID: ${mappedPoint.x}, ${mappedPoint.y}")
-
-                                val snapped = findNearestRoad(grid, mappedPoint.x, mappedPoint.y)
-
-                                val finalPoint = if (snapped != null) {
-                                    Point(snapped.first, snapped.second)
-                                } else mappedPoint
-
-                                landmarks = landmarks.toMutableList().also {
-                                    it[index] = it[index].copy(
-                                        selected = true,
-                                        point = finalPoint
-                                    )
-                                }
-                            }
-                        } else {
-                            landmarks = landmarks.toMutableList().also {
-                                it[index] = it[index].copy(
-                                    selected = !it[index].selected
-                                )
-                            }
+                        landmarks = landmarks.toMutableList().also {
+                            it[index] = it[index].copy(
+                                selected = !it[index].selected
+                            )
                         }
                     },
                     onStart = {
@@ -1124,17 +1059,19 @@ fun MainMapScreen() {
                             return@onStart
                         }
 
-                        val needTags = itemTagsToNeed(selectedNeeds)
-                        if (needTags.isEmpty()) {
+                        if (selectedNeeds.isEmpty()) {
                             showGeneticItemsSheet = false
                             return@onStart
                         }
+
+                        val orderedCategoryKeys = CATEGORY_KEYS.filter { it in selectedNeeds }
 
                         val result = buildGeneticPathOnGrid(
                             grid = grid,
                             start = Point(start.first, start.second),
                             allCatalog = foodVenuesCatalog(),
-                            need = needTags
+                            need = itemTagsToNeed(selectedNeeds),
+                            selectedCategoryKeys = orderedCategoryKeys
                         )
 
                         path = result.path
@@ -1152,10 +1089,6 @@ fun MainMapScreen() {
                     root = decisionTreeRoot,
                     onExit = {
                         decisionTreeMode = false
-                        decisionTreeCurrentNode = decisionTreeRoot
-                        decisionTreeAnswers = emptyMap()
-                        decisionTreePath = emptyList()
-                        decisionTreeResult = null
                     }
                 )
             }
@@ -1176,37 +1109,6 @@ fun MainMapScreen() {
                     onClose = { showCafeSelectionDialog = false }
                 )
             }
-        }
-
-    }
-
-
-}
-
-fun requestLocationPermission(context: Context) {
-    if (ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) != PackageManager.PERMISSION_GRANTED
-    ) {
-        ActivityCompat.requestPermissions(
-            context as ComponentActivity,
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-            1001
-        )
-    }
-}
-
-@SuppressLint("MissingPermission")
-fun getCurrentLocation(
-    context: Context,
-    onLocation: (Double, Double) -> Unit
-) {
-    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-
-    fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-        if (location != null) {
-            onLocation(location.latitude, location.longitude)
         }
     }
 }

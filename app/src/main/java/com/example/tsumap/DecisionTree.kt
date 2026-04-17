@@ -110,10 +110,7 @@ fun trainDecisionTree(
 
     return DecisionNode.Split(
         feature = bestFeature,
-        children
-
-
-        = children,
+        children = children,
         majorityLabel = currentMajority
     )
 }

@@ -16,8 +16,7 @@ data class Point(
 data class Landmark(
     val name: String,
     val point: Point,
-    var selected: Boolean = false,
-    val isUserLocation: Boolean = false
+    var selected: Boolean = false
 )
 
 data class Cluster(

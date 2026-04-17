@@ -291,7 +291,7 @@ val test = loadMnist(testImages, testLabels)
 
 val model = DigitClassifier(inputSize = 50 * 50, hiddenSize = 128, numClasses = 10, seed = 42)
 
-val epochs = 5
+val epochs = 2
 val batchSize = 32
 val learningRate = 0.01f
 val rng = Random(42)
