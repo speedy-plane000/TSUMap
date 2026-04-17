@@ -1678,13 +1678,11 @@ fun DecisionTreeChatScreen(
     data class ChatMsg(val text: String, val fromUser: Boolean)
 
     var currentNode by remember(root) { mutableStateOf(root) }
-    var result by remember(root) { mutableStateOf<String?>(null) }
     var chat by remember(root) { mutableStateOf(listOf<ChatMsg>()) }
 
 
     LaunchedEffect(root) {
         chat = emptyList()
-        result = null
         currentNode = root
 
         when (val node = currentNode) {
@@ -1693,7 +1691,6 @@ fun DecisionTreeChatScreen(
             }
 
             is DecisionNode.Leaf -> {
-                result = node.prediction
                 chat = chat + ChatMsg("Рекомендованное место: ${node.prediction}", fromUser = false)
             }
 
@@ -1719,7 +1716,6 @@ fun DecisionTreeChatScreen(
             }
 
             is DecisionNode.Leaf -> {
-                result = next.prediction
                 chat = chat + ChatMsg("Рекомендованное место: ${next.prediction}", fromUser = false)
             }
         }
@@ -1812,7 +1808,6 @@ fun DecisionTreeChatScreen(
                     Button(
                         onClick = {
                             currentNode = root
-                            result = null
                             chat = emptyList()
                             val node = currentNode
                             if (node is DecisionNode.Split) {
