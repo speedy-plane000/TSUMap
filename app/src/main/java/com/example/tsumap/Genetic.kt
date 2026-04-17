@@ -1,7 +1,6 @@
 package com.example.tsumap
 
 
-
 import java.time.LocalDateTime
 import java.time.LocalTime
 import kotlin.math.hypot
@@ -9,7 +8,7 @@ import kotlin.math.roundToLong
 import kotlin.random.Random
 
 
-enum class ItemTag{
+enum class ItemTag {
     DISPOSABLE,
     RAMEN, WOK, RICE,
     SHAWARMA,
@@ -189,6 +188,7 @@ fun canVisitAt(hours: VenueHours, time: LocalDateTime): Boolean {
                 cur >= hours.open || cur < hours.close
             }
         }
+
         else -> true
     }
 }
@@ -266,8 +266,6 @@ fun randomPermutation(n: Int, rng: Random = Random.Default): Chromosome {
 }
 
 
-
-
 fun tournamentPick(costs: DoubleArray, k: Int, rng: Random = Random.Default): Int {
     var best = rng.nextInt(costs.size)
     var bestCost = costs[best]
@@ -310,7 +308,6 @@ fun oxCrossover(a: Chromosome, b: Chromosome, rng: Random = Random.Default): Chr
 }
 
 
-
 fun mutateSwap(ch: Chromosome, rng: Random = Random.Default) {
     if (ch.size < 2) return
     val i = rng.nextInt(ch.size)
@@ -322,7 +319,6 @@ fun mutateSwap(ch: Chromosome, rng: Random = Random.Default) {
 }
 
 
-
 data class GaParams(
     val populationSize: Int = 120,
     val maxGenerations: Int = 500,
@@ -332,6 +328,7 @@ data class GaParams(
     val elitism: Int = 2,
     val immigrants: Int = 2
 )
+
 fun runGeneticAlgorithm(
     startPoint: Point,
     startTime: LocalDateTime,
@@ -348,7 +345,8 @@ fun runGeneticAlgorithm(
     val costs = DoubleArray(params.populationSize)
     fun evalAll() {
         for (i in population.indices) {
-            costs[i] = evaluateRoute(startPoint, startTime, need, venues, population[i], config).cost
+            costs[i] =
+                evaluateRoute(startPoint, startTime, need, venues, population[i], config).cost
         }
     }
     evalAll()
@@ -358,7 +356,8 @@ fun runGeneticAlgorithm(
     for (gen in 0 until params.maxGenerations) {
         evalAll()
         val bestIdx = costs.indices.minBy { costs[it] }
-        val bestThisGen = evaluateRoute(startPoint, startTime, need, venues, population[bestIdx], config)
+        val bestThisGen =
+            evaluateRoute(startPoint, startTime, need, venues, population[bestIdx], config)
         onGeneration(gen, bestThisGen, population[bestIdx].copyOf())
         if (costs[bestIdx] < bestEverEval.cost) {
             bestEverChrom = population[bestIdx].copyOf()
@@ -373,7 +372,11 @@ fun runGeneticAlgorithm(
         while (next.size < params.populationSize) {
             val p1 = population[tournamentPick(costs, params.tournamentK, rng)].copyOf()
             val p2 = population[tournamentPick(costs, params.tournamentK, rng)].copyOf()
-            val child = if (rng.nextDouble() < params.crossoverRate) oxCrossover(p1, p2, rng) else p1.copyOf()
+            val child = if (rng.nextDouble() < params.crossoverRate) oxCrossover(
+                p1,
+                p2,
+                rng
+            ) else p1.copyOf()
             if (rng.nextDouble() < params.mutationRate) mutateSwap(child, rng)
             next.add(child)
         }

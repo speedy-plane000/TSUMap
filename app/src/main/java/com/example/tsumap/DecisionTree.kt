@@ -93,7 +93,7 @@ fun trainDecisionTree(
     }
 
     val groups = rows.groupBy { it.features[bestFeature].orEmpty() }
-    if (groups.size <= 1){
+    if (groups.size <= 1) {
         return DecisionNode.Leaf(currentMajority)
     }
 

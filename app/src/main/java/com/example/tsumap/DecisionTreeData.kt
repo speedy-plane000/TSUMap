@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.compose.ui.graphics.colorspace.Connector
 
 
-
 data class TrainingRow(
     val features: Map<String, String>,
     val label: String
@@ -13,7 +12,7 @@ data class TrainingRow(
 fun loadTrainingRows(
     context: Context,
     fileName: String = "data.csv",
-): List<TrainingRow>{
+): List<TrainingRow> {
     val lines = context.assets.open(fileName)
         .bufferedReader()
         .readLines()
@@ -26,7 +25,7 @@ fun loadTrainingRows(
 
     return lines.drop(1).mapNotNull { line ->
         val cols = line.split(",")
-        if (cols.size != headers.size) return@mapNotNull    null
+        if (cols.size != headers.size) return@mapNotNull null
         val features = featureNames.indices.associate { i ->
             featureNames[i].trim() to cols[i].trim()
         }

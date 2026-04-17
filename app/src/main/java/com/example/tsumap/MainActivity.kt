@@ -68,7 +68,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.mutableFloatStateOf
 
 
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -80,7 +79,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -123,18 +121,20 @@ fun MainMapScreen() {
     )
 
     var landmarks by remember {
-        mutableStateOf(listOf(
-            Landmark("Декоративный Домик", Point(28, 75)),
-            Landmark("Ботанический сад", Point(55, 66)),
-            Landmark("Скульптура Белки", Point(116, 88)),
-            Landmark("Шахматы", Point(79, 99)),
-            Landmark("Камень", Point(110, 101)),
-            Landmark("Озеро", Point(91, 31)),
-            Landmark("Деревянная Арка", Point(63, 72)),
-            Landmark("Мечеть Белая", Point(78, 6)),
-            Landmark("Арт-объект Птицы", Point(131, 95)),
-            Landmark("Стрит-арт Хамелеон", Point(141, 47))
-        ))
+        mutableStateOf(
+            listOf(
+                Landmark("Декоративный Домик", Point(28, 75)),
+                Landmark("Ботанический сад", Point(55, 66)),
+                Landmark("Скульптура Белки", Point(116, 88)),
+                Landmark("Шахматы", Point(79, 99)),
+                Landmark("Камень", Point(110, 101)),
+                Landmark("Озеро", Point(91, 31)),
+                Landmark("Деревянная Арка", Point(63, 72)),
+                Landmark("Мечеть Белая", Point(78, 6)),
+                Landmark("Арт-объект Птицы", Point(131, 95)),
+                Landmark("Стрит-арт Хамелеон", Point(141, 47))
+            )
+        )
     }
 
 
@@ -205,7 +205,7 @@ fun MainMapScreen() {
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
-            title = {Text("Map", color = TsuWhite)},
+            title = { Text("Map", color = TsuWhite) },
             navigationIcon = {
                 Icon(
                     painter = painterResource(R.drawable.tsu_logo),
@@ -356,7 +356,7 @@ fun MainMapScreen() {
                                     )
                                 } else if (selectionMode == "end") {
                                     endPoint = finalX to finalY
-                                } else if (selectionMode == "genetic_start"){
+                                } else if (selectionMode == "genetic_start") {
                                     geneticStartPoint = finalX to finalY
                                     selectionMode = null
                                     geneticHintText = null
@@ -418,7 +418,7 @@ fun MainMapScreen() {
                             }
 
 
-                            if (path.isNotEmpty()  && steps.isEmpty()) {
+                            if (path.isNotEmpty() && steps.isEmpty()) {
                                 if (path.size > 1) {
                                     for (i in 0 until path.size - 1) {
                                         val (x1, y1) = path[i]
@@ -440,7 +440,8 @@ fun MainMapScreen() {
                                 }
                             }
                             if (clusters.isNotEmpty()) {
-                                val colors = listOf(Color.Red, Color.Blue, Color.Green, Color.Magenta)
+                                val colors =
+                                    listOf(Color.Red, Color.Blue, Color.Green, Color.Magenta)
 
                                 clusters.forEachIndexed { index, cluster ->
 
@@ -494,7 +495,8 @@ fun MainMapScreen() {
 
                                     val px =
                                         startX + (point.x + 0.5f) / grid[0].size * actualVisualWidth
-                                    val py = startY + (point.y + 0.5f) / grid.size * actualVisualHeight
+                                    val py =
+                                        startY + (point.y + 0.5f) / grid.size * actualVisualHeight
 
                                     drawCircle(
                                         color = Color.Yellow,
@@ -1070,7 +1072,8 @@ fun MainMapScreen() {
                 GeneticItemsSheet(
                     selected = selectedNeeds,
                     onToggle = { key ->
-                        selectedNeeds = if (key in selectedNeeds) selectedNeeds - key else selectedNeeds + key
+                        selectedNeeds =
+                            if (key in selectedNeeds) selectedNeeds - key else selectedNeeds + key
                     },
                     onStart = onStart@{
                         val start = geneticStartPoint ?: run {
@@ -1082,7 +1085,6 @@ fun MainMapScreen() {
                             showGeneticItemsSheet = false
                             return@onStart
                         }
-
 
 
                         val result = buildGeneticPathOnGrid(
@@ -1130,6 +1132,7 @@ fun MainMapScreen() {
         }
     }
 }
+
 @Composable
 fun RoadsGridOverlay(
     grid: Array<IntArray>,
@@ -1280,7 +1283,8 @@ fun RatingDrawingDialog(
     var predictedResult by remember { mutableStateOf<String?>(null) }
     var lastDragCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     val (classifier, modelReady) = remember {
-        val model = DigitClassifier(inputSize = 50 * 50, hiddenSize = 128, numClasses = 10, seed = 42)
+        val model =
+            DigitClassifier(inputSize = 50 * 50, hiddenSize = 128, numClasses = 10, seed = 42)
         val loaded = try {
             model.loadFromAssets(context, "digit_model.bin")
             true
@@ -1356,8 +1360,10 @@ fun RatingDrawingDialog(
                             .pointerInput(Unit) {
                                 detectTapGestures { offset ->
                                     val cellSize = size.width / gridSize
-                                    val cellX = (offset.x / cellSize).toInt().coerceIn(0, gridSize - 1)
-                                    val cellY = (offset.y / cellSize).toInt().coerceIn(0, gridSize - 1)
+                                    val cellX =
+                                        (offset.x / cellSize).toInt().coerceIn(0, gridSize - 1)
+                                    val cellY =
+                                        (offset.y / cellSize).toInt().coerceIn(0, gridSize - 1)
                                     paintBrush(cellX, cellY)
                                 }
                             }
@@ -1365,8 +1371,10 @@ fun RatingDrawingDialog(
                                 detectDragGestures(
                                     onDragStart = { startOffset ->
                                         val cellSize = size.width / gridSize
-                                        val sx = (startOffset.x / cellSize).toInt().coerceIn(0, gridSize - 1)
-                                        val sy = (startOffset.y / cellSize).toInt().coerceIn(0, gridSize - 1)
+                                        val sx = (startOffset.x / cellSize).toInt()
+                                            .coerceIn(0, gridSize - 1)
+                                        val sy = (startOffset.y / cellSize).toInt()
+                                            .coerceIn(0, gridSize - 1)
                                         val startCell = sx to sy
                                         paintBrush(sx, sy)
                                         lastDragCell = startCell
@@ -1376,9 +1384,11 @@ fun RatingDrawingDialog(
                                 ) { change, _ ->
                                     val cellSize = size.width / gridSize
                                     val cellX =
-                                        (change.position.x / cellSize).toInt().coerceIn(0, gridSize - 1)
+                                        (change.position.x / cellSize).toInt()
+                                            .coerceIn(0, gridSize - 1)
                                     val cellY =
-                                        (change.position.y / cellSize).toInt().coerceIn(0, gridSize - 1)
+                                        (change.position.y / cellSize).toInt()
+                                            .coerceIn(0, gridSize - 1)
                                     val currentCell = cellX to cellY
                                     val previousCell = lastDragCell
                                     if (previousCell != null) {
@@ -1417,7 +1427,8 @@ fun RatingDrawingDialog(
                     Button(
                         onClick = {
                             if (!modelReady) {
-                                predictedResult = "Модель не обучена. Запустите train_mnist.main.kts на ПК."
+                                predictedResult =
+                                    "Модель не обучена. Запустите train_mnist.main.kts на ПК."
                             } else {
                                 val input = FloatArray(gridSize * gridSize) { idx ->
                                     val y = idx / gridSize
@@ -1530,11 +1541,11 @@ fun LandmarkSelectionSheet(
                         containerColor = TsuBlue,
                         contentColor = TsuWhite
                     )
-                    ) {
-                        Text("Построить маршрут")
-                    }
-                            Button(
-                            onClick = onClose,
+                ) {
+                    Text("Построить маршрут")
+                }
+                Button(
+                    onClick = onClose,
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = TsuBlue,
@@ -1547,6 +1558,7 @@ fun LandmarkSelectionSheet(
         }
     }
 }
+
 @Composable
 fun GeneticItemsSheet(
     selected: Set<String>,
@@ -1625,6 +1637,7 @@ fun GeneticItemsSheet(
         }
     }
 }
+
 @Composable
 fun DecisionTreeChatScreen(
     root: DecisionNode?,
@@ -1646,10 +1659,12 @@ fun DecisionTreeChatScreen(
             is DecisionNode.Split -> {
                 chat = chat + ChatMsg(featureRu(node.feature), fromUser = false)
             }
+
             is DecisionNode.Leaf -> {
                 result = node.prediction
                 chat = chat + ChatMsg("Рекомендованное место: ${node.prediction}", fromUser = false)
             }
+
             null -> {
                 chat = chat + ChatMsg("Дерево не загружено", fromUser = false)
             }
@@ -1670,6 +1685,7 @@ fun DecisionTreeChatScreen(
             is DecisionNode.Split -> {
                 chat = chat + ChatMsg(featureRu(next.feature), fromUser = false)
             }
+
             is DecisionNode.Leaf -> {
                 result = next.prediction
                 chat = chat + ChatMsg("Рекомендованное место: ${next.prediction}", fromUser = false)
@@ -1770,7 +1786,10 @@ fun DecisionTreeChatScreen(
                             if (node is DecisionNode.Split) {
                                 chat = chat + ChatMsg(featureRu(node.feature), fromUser = false)
                             } else if (node is DecisionNode.Leaf) {
-                                chat = chat + ChatMsg("Рекомендованное место: ${node.prediction}", fromUser = false)
+                                chat = chat + ChatMsg(
+                                    "Рекомендованное место: ${node.prediction}",
+                                    fromUser = false
+                                )
                             } else {
                                 chat = chat + ChatMsg("Дерево не загружено", fromUser = false)
                             }
