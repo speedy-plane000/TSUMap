@@ -89,8 +89,7 @@ class DigitClassifier(
     private val random = Random(seed)
     private val dense1 = DenseLayer(inputSize = inputSize, outputSize = hiddenSize, random = random)
     private val relu = ReLULayer()
-    private val dense2 =
-        DenseLayer(inputSize = hiddenSize, outputSize = numClasses, random = random)
+    private val dense2 = DenseLayer(inputSize = hiddenSize, outputSize = numClasses, random = random)
 
     fun predict(input: FloatArray): Int {
         val batch = arrayOf(input)

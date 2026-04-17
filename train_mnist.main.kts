@@ -48,12 +48,9 @@ class DenseLayer(
     }
 
     init {
-        val std = sqrt(2f / inputSize)
+        val limit = sqrt(6f / (inputSize + outputSize))
         for (i in weights.indices) {
-            val u1 = random.nextFloat().coerceAtLeast(1e-7f)
-            val u2 = random.nextFloat()
-            val z = sqrt(-2f * kotlin.math.ln(u1)) * kotlin.math.cos(2f * Math.PI.toFloat() * u2)
-            weights[i] = z * std
+            weights[i] = random.nextFloat() * 2f * limit - limit
         }
     }
 

@@ -22,7 +22,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.foundation.layout.Row
-import android.content.Context
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -84,6 +85,7 @@ fun MainMapScreen() {
     var steps by remember { mutableStateOf<List<AStarStep>>(emptyList()) }
     var currentStep by remember { mutableStateOf(0) }
     var path by remember { mutableStateOf<List<Pair<Int, Int>>>(emptyList()) }
+    var noPathMessageVisible by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     LaunchedEffect(steps) {
@@ -92,8 +94,8 @@ fun MainMapScreen() {
                 currentStep = i
                 kotlinx.coroutines.delay(10)
             }
-
             path = steps.last().path
+            noPathMessageVisible = steps.last().path.isEmpty()
         }
     }
 
@@ -249,7 +251,24 @@ fun MainMapScreen() {
                 }
             }
 
-
+            if (aStarMode && noPathMessageVisible && startPoint != null && endPoint != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 16.dp)
+                        .statusBarsPadding()
+                        .padding(top = 56.dp, start = 16.dp, end = 16.dp)
+                        .background(TsuWhite.copy(alpha = 0.9f), CircleShape)
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        "Пути нет",
+                        color = TsuBlue,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
 
             Box(
                 modifier = Modifier
@@ -324,7 +343,9 @@ fun MainMapScreen() {
                                     steps = emptyList()
 
                                     if (startPoint != null && endPoint != null) {
-                                        path = aStar(grid, startPoint!!, endPoint!!, obstacles)
+                                        val newPath = aStar(grid, startPoint!!, endPoint!!, obstacles)
+                                        path = newPath
+                                        noPathMessageVisible = newPath.isEmpty()
                                     }
 
                                     return@detectTapGestures
@@ -348,7 +369,11 @@ fun MainMapScreen() {
                                 steps = emptyList()
 
                                 if (startPoint != null && endPoint != null) {
-                                    path = aStar(grid, startPoint!!, endPoint!!, obstacles)
+                                    val newPath = aStar(grid, startPoint!!, endPoint!!, obstacles)
+                                    path = newPath
+                                    noPathMessageVisible = newPath.isEmpty()
+                                } else {
+                                    noPathMessageVisible = false
                                 }
                             }
                         }
@@ -542,6 +567,24 @@ fun MainMapScreen() {
                                         )
                                     )
                                 }
+                                if (step.path.size > 1) {
+                                    for (i in 0 until step.path.size - 1) {
+                                        val (x1, y1) = step.path[i]
+                                        val (x2, y2) = step.path[i + 1]
+
+                                        val px1 = startX + (x1 + 0.5f) * cellWidth
+                                        val py1 = startY + (y1 + 0.5f) * cellHeight
+                                        val px2 = startX + (x2 + 0.5f) * cellWidth
+                                        val py2 = startY + (y2 + 0.5f) * cellHeight
+
+                                        drawLine(
+                                            color = TsuWhite,
+                                            start = Offset(px1, py1),
+                                            end = Offset(px2, py2),
+                                            strokeWidth = 6f
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -711,6 +754,7 @@ fun MainMapScreen() {
                                 isAcoMode = false
 
                                 path = emptyList()
+                                noPathMessageVisible = false
                                 startPoint = null
                                 endPoint = null
                                 selectionMode = null
@@ -929,13 +973,16 @@ fun MainMapScreen() {
                         Button(
                             onClick = {
                                 if (startPoint != null && endPoint != null) {
-                                    steps = aStarWithSteps(
+                                    val computedSteps = aStarWithSteps(
                                         grid,
                                         startPoint!!,
                                         endPoint!!,
                                         obstacles
                                     )
+                                    steps = computedSteps
                                     currentStep = 0
+                                    path = emptyList()
+                                    noPathMessageVisible = computedSteps.lastOrNull()?.path?.isEmpty() ?: true
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(
@@ -954,6 +1001,7 @@ fun MainMapScreen() {
                                 selectionMode = null
                                 path = emptyList()
                                 obstacles.clear()
+                                noPathMessageVisible = false
                                 steps = emptyList()
                             },
                             colors = ButtonDefaults.buttonColors(
