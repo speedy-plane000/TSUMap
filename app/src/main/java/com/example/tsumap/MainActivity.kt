@@ -250,8 +250,9 @@ fun MainMapScreen() {
                 val minX = cx + s * (cx - startX - actualVisualWidth)
                 val clampedX = if (minX <= maxX) rawOffset.x.coerceIn(minX, maxX) else 0f
 
-                val maxY = s * (cy - startY) - cy
-                val minY = cy + s * (cy - startY - actualVisualHeight)
+                val yExtra = 200f
+                val maxY = s * (cy - startY) - cy + yExtra
+                val minY = cy + s * (cy - startY - actualVisualHeight) - yExtra
                 val clampedY = if (minY <= maxY) rawOffset.y.coerceIn(minY, maxY) else 0f
 
                 return Offset(clampedX, clampedY)
