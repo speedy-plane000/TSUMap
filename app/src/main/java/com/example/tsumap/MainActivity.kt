@@ -373,10 +373,6 @@ fun MainMapScreen() {
 
                                 if (selectionMode == "start") {
                                     startPoint = finalX to finalY
-                                    android.util.Log.d(
-                                        "TAP_COORDS",
-                                        "Start: x=$finalX, y=$finalY"
-                                    )
                                 } else if (selectionMode == "end") {
                                     endPoint = finalX to finalY
                                 } else if (selectionMode == "genetic_start") {
@@ -741,7 +737,6 @@ fun MainMapScreen() {
                 onClick = { showRoads = !showRoads },
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .statusBarsPadding()
                     .padding(top = 8.dp, end = 16.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = TsuBlue,
